@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -24,15 +24,7 @@ function Test() {
   const [showMeaning, setShowMeaning] = useState(false);
   const [progress, setProgress] = useState(0);
 
-  useEffect(() => {
-    if (groups.length === 0) {
-      navigate('/');
-      return;
-    }
-    fetchWords();
-  }, [groups, wordCount, navigate]);
-
-  const fetchWords = async () => {
+  const fetchWords = useCallback(async () => {
     try {
       const response = await axios.post('http://localhost:5000/api/test', {
         groups,
@@ -43,7 +35,15 @@ function Test() {
     } catch (error) {
       console.error('Error fetching words:', error);
     }
-  };
+  }, [groups, wordCount]);
+
+  useEffect(() => {
+    if (groups.length === 0) {
+      navigate('/');
+      return;
+    }
+    fetchWords();
+  }, [groups, wordCount, navigate, fetchWords]);
 
   const handleResponse = async (isCorrect) => {
     if (currentIndex >= words.length) return;

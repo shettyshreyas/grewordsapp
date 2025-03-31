@@ -1,0 +1,52 @@
+name: PR Preview & Lint
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - run: npm ci
+      - run: npm run lint
+
+  preview:
+    runs-on: ubuntu-latest
+    needs: lint
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Create .env for preview
+        run: |
+          echo "REACT_APP_API_URL=${{ secrets.REACT_APP_API_URL_DEV }}" > .env
+
+      - run: npm run build
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: preview-build
+          path: frontend/build

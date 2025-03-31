@@ -1,4 +1,4 @@
-from app import app, db, Word
+from app import app, db, Word, get_word_meaning
 import pandas as pd
 import requests
 from tqdm import tqdm
@@ -36,7 +36,34 @@ def populate_database(excel_path):
     db.session.commit()
     print("Database populated successfully!")
 
-if __name__ == '__main__':
+test_words = [
+    {"word": "ubiquitous", "group": "Common GRE Words"},
+    {"word": "ephemeral", "group": "Common GRE Words"},
+    {"word": "pragmatic", "group": "Common GRE Words"},
+    {"word": "esoteric", "group": "Advanced Words"},
+    {"word": "sycophant", "group": "Advanced Words"},
+]
+
+def populate_test_data():
     with app.app_context():
-        excel_path = input("Enter the path to your Excel file: ")
-        populate_database(excel_path) 
+        # Clear existing data
+        Word.query.delete()
+        db.session.commit()
+        
+        # Add test words
+        for word_data in test_words:
+            meaning = get_word_meaning(word_data["word"])
+            word = Word(
+                word=word_data["word"],
+                group=word_data["group"],
+                meaning=meaning,
+                correct_count=0,
+                incorrect_count=0
+            )
+            db.session.add(word)
+        
+        db.session.commit()
+        print("Test data populated successfully!")
+
+if __name__ == "__main__":
+    populate_test_data() 

@@ -10,10 +10,8 @@ import {
   Link,
 } from '@mui/material';
 import { CloudUpload as CloudUploadIcon, Download as DownloadIcon } from '@mui/icons-material';
-import axios from 'axios';
-import config from '../config';
 
-const Upload = () => {
+const Upload = ({ apiUrl }) => {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
@@ -34,23 +32,38 @@ const Upload = () => {
       return;
     }
 
-    const formData = new FormData();
-    formData.append('file', file);
-
     setUploading(true);
     setError(null);
     setSuccess(false);
 
+    const formData = new FormData();
+    formData.append('file', file);
+
     try {
-      await axios.post(`${config.apiUrl}/api/upload`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      const response = await fetch(`${apiUrl}/api/upload`, {
+        method: 'POST',
+        body: formData,
       });
+
+      let errorMessage = 'Upload failed';
+      
+      if (!response.ok) {
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          // If response is not JSON, try to get text
+          const text = await response.text();
+          errorMessage = text || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
       setSuccess(true);
       setFile(null);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Error uploading file');
+    } catch (error) {
+      console.error('Upload error:', error);
+      setError(error.message || 'Error uploading file');
     } finally {
       setUploading(false);
     }

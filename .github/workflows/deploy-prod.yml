@@ -18,7 +18,7 @@ permissions:
   pull-requests: write
 
 jobs:
-  build-and-deploy:
+  deploy-frontend:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -60,6 +60,32 @@ jobs:
         with:
           artifact_name: github-pages-prod
           github_token: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Deploy to Render
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          curl -X POST https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}"
 
       - name: Notify on success
         if: success()

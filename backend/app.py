@@ -16,6 +16,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 import sys
 from functools import wraps
+from sqlalchemy import text 
 
 # Configure logging
 logging.basicConfig(
@@ -643,7 +644,7 @@ if __name__ == '__main__':
         logger.info("Starting GRE Words application...")
         # Test database connection
         with app.app_context():
-            db.session.execute('SELECT 1')
+            db.session.execute(text('SELECT 1'))
             logger.info("Database connection successful")
         
         # Log environment and configuration

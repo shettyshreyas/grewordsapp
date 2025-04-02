@@ -12,6 +12,35 @@ import json
 from nltk.corpus import wordnet
 import nltk
 from sqlalchemy import func, desc
+import logging
+from logging.handlers import RotatingFileHandler
+import sys
+from functools import wraps
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        RotatingFileHandler('app.log', maxBytes=10240000, backupCount=10),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
+
+def log_db_commit(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            result = func(*args, **kwargs)
+            db.session.commit()
+            logger.info(f"Database commit successful in {func.__name__}")
+            return result
+        except Exception as e:
+            logger.error(f"Database commit failed in {func.__name__}: {str(e)}", exc_info=True)
+            db.session.rollback()
+            raise
+    return wrapper
 
 nltk.download('wordnet', quiet=True)
 
@@ -28,10 +57,31 @@ CORS(app, resources={
 
 # Load configuration
 app.config.from_object(config['development'])
+logger.info("Application configuration loaded")
 
 # Initialize extensions
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
+logger.info("Database and migration extensions initialized")
+
+# Health check endpoint
+@app.route('/health', methods=['GET'])
+def health_check():
+    try:
+        # Check database connection
+        db.session.execute('SELECT 1')
+        db_status = "healthy"
+        logger.info("Database health check passed")
+    except Exception as e:
+        db_status = "unhealthy"
+        logger.error(f"Database health check failed: {str(e)}")
+    
+    return jsonify({
+        'status': 'up',
+        'timestamp': datetime.utcnow().isoformat(),
+        'database': db_status,
+        'environment': app.config['ENV']
+    })
 
 # Database Models
 class Word(db.Model):
@@ -104,6 +154,8 @@ def get_words():
     search = request.args.get('search', '').lower()
     group = request.args.get('group', '')
     
+    logger.info(f"Fetching words with search='{search}' and group='{group}'")
+    
     query = Word.query
     
     if search:
@@ -112,6 +164,8 @@ def get_words():
         query = query.filter(Word.group == group)
         
     words = query.order_by(Word.word).all()
+    
+    logger.info(f"Found {len(words)} words matching the criteria")
     
     return jsonify([{
         'id': word.id,
@@ -128,6 +182,8 @@ def create_test():
     groups = data.get('groups', [])
     word_count = data.get('word_count', 10)
     
+    logger.info(f"Creating new test with groups={groups} and word_count={word_count}")
+    
     # Create a new test session
     test_session = TestSession(
         groups=json.dumps(groups),
@@ -135,6 +191,7 @@ def create_test():
     )
     db.session.add(test_session)
     db.session.commit()
+    logger.info(f"Created test session with ID: {test_session.id}")
     
     # Query words with priority for incorrect ones
     query = Word.query.filter(Word.group.in_(groups))
@@ -143,11 +200,14 @@ def create_test():
         Word.last_incorrect.desc()
     ).limit(word_count).all()
     
+    logger.info(f"Selected {len(words)} words for the test")
+    
     # Update last_tested for all words in the test
     for word in words:
         word.last_tested = datetime.utcnow()
     
     db.session.commit()
+    logger.info("Updated last_tested timestamp for all test words")
     
     test_words = [{
         'id': word.id,
@@ -159,6 +219,7 @@ def create_test():
     return jsonify(test_words)
 
 @app.route('/api/answer', methods=['POST'])
+@log_db_commit
 def submit_answer():
     data = request.json
     word_id = data.get('word_id')
@@ -185,10 +246,10 @@ def submit_answer():
         word.last_incorrect = datetime.utcnow()
         word.correct_count = 0
     
-    db.session.commit()
     return jsonify({'message': 'Answer recorded successfully'})
 
 @app.route('/api/test-complete', methods=['POST'])
+@log_db_commit
 def test_complete():
     data = request.json
     test_session_id = data.get('test_session_id')
@@ -203,7 +264,6 @@ def test_complete():
     ).count()
     
     test_session.correct_words = correct_count
-    db.session.commit()
     
     return jsonify({
         'message': 'Test completed successfully',
@@ -262,6 +322,7 @@ def get_words_to_review():
     } for word in words])
 
 @app.route('/api/words/<int:word_id>/refresh', methods=['POST'])
+@log_db_commit
 def refresh_word_meaning(word_id):
     word = Word.query.get_or_404(word_id)
     result = get_word_meaning(word.word)
@@ -269,7 +330,6 @@ def refresh_word_meaning(word_id):
     if result:
         word.meaning = result['meaning']
         word.synonyms = json.dumps(result['synonyms'])
-        db.session.commit()
         return jsonify({
             'message': 'Word meaning refreshed successfully',
             'meaning': result['meaning'],
@@ -347,20 +407,27 @@ def reset_stats():
 
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
+    logger.info("Starting file upload process")
+    
     if 'file' not in request.files:
+        logger.error("No file part in the request")
         return jsonify({'error': 'No file part'}), 400
     
     file = request.files['file']
     if file.filename == '':
+        logger.error("No selected file")
         return jsonify({'error': 'No selected file'}), 400
     
     if not file.filename.endswith('.xlsx'):
+        logger.error(f"Invalid file type: {file.filename}")
         return jsonify({'error': 'Please upload an Excel file (.xlsx)'}), 400
     
     try:
+        logger.info(f"Processing Excel file: {file.filename}")
         df = pd.read_excel(file)
         required_columns = ['word', 'group_name']
         if not all(col in df.columns for col in required_columns):
+            logger.error(f"Missing required columns. Found columns: {df.columns.tolist()}")
             return jsonify({'error': f'Excel file must contain columns: {", ".join(required_columns)}'}), 400
         
         processed_count = 0
@@ -370,22 +437,28 @@ def upload_file():
         batch_size = 30
         current_batch = []
         
-        for _, row in df.iterrows():
+        logger.info(f"Starting to process {len(df)} rows from Excel file")
+        
+        for index, row in df.iterrows():
             word_text = str(row['word']).strip().lower()
             group = str(row['group_name']).strip()
             
             if not word_text or not group:
+                logger.warning(f"Skipping row {index + 2}: Empty word or group")
                 continue
                 
             existing_word = Word.query.filter_by(word=word_text).first()
             
             if existing_word:
                 if existing_word.group == group:
+                    logger.debug(f"Skipping existing word '{word_text}' with same group")
                     skipped_count += 1
                     continue
+                logger.info(f"Updating group for word '{word_text}' from '{existing_word.group}' to '{group}'")
                 existing_word.group = group
                 updated_count += 1
             else:
+                logger.info(f"Processing new word: '{word_text}' for group '{group}'")
                 result = get_word_meaning(word_text)
                 new_word = Word(
                     word=word_text,
@@ -397,18 +470,25 @@ def upload_file():
                 processed_count += 1
                 
                 if not result:
+                    logger.warning(f"Failed to get meaning for word: '{word_text}'")
                     failed_words.append(word_text)
             
             # Commit batch if it reaches the batch size
             if len(current_batch) >= batch_size:
+                logger.info(f"Committing batch of {len(current_batch)} words")
                 db.session.bulk_save_objects(current_batch)
                 db.session.commit()
+                logger.info("Batch commit successful")
                 current_batch = []
         
         # Commit any remaining words in the last batch
         if current_batch:
+            logger.info(f"Committing final batch of {len(current_batch)} words")
             db.session.bulk_save_objects(current_batch)
             db.session.commit()
+            logger.info("Final batch commit successful")
+        
+        logger.info(f"File processing completed. Stats: processed={processed_count}, skipped={skipped_count}, updated={updated_count}, failed={len(failed_words)}")
         
         return jsonify({
             'message': 'File processed successfully',
@@ -422,7 +502,9 @@ def upload_file():
         })
         
     except Exception as e:
+        logger.error(f"Error processing file: {str(e)}", exc_info=True)
         db.session.rollback()
+        logger.info("Database transaction rolled back due to error")
         return jsonify({'error': f'Error processing file: {str(e)}'}), 500
 
 @app.route('/api/words/delete-all', methods=['DELETE'])
@@ -557,5 +639,21 @@ def get_problematic_words():
     return jsonify(result)
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    try:
+        logger.info("Starting GRE Words application...")
+        # Test database connection
+        with app.app_context():
+            db.session.execute('SELECT 1')
+            logger.info("Database connection successful")
+        
+        # Log environment and configuration
+        logger.info(f"Running in {app.config['ENV']} mode")
+        logger.info(f"Database URI: {app.config['SQLALCHEMY_DATABASE_URI']}")
+        
+        # Start the application
+        port = int(os.environ.get('PORT', 5000))
+        logger.info(f"Starting server on port {port}")
+        app.run(host='0.0.0.0', port=port)
+    except Exception as e:
+        logger.error(f"Failed to start application: {str(e)}")
+        raise

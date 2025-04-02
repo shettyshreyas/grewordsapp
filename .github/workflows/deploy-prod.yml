@@ -86,22 +86,3 @@ jobs:
         run: |
           curl -X POST https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys \
             -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}"
-
-      - name: Notify on success
-        if: success()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const comment = await github.rest.repos.createCommitComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              commit_sha: context.sha,
-              body: '🚀 Deployed to Render successfully!',
-            });
-
-            await github.rest.reactions.createForCommitComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              comment_id: comment.data.id,
-              content: 'rocket',
-            });

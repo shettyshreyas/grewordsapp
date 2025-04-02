@@ -1,13 +1,25 @@
 services:
   - type: web
     name: grewords-backend
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    env: docker
+    plan: free
+    repo: https://github.com/yourusername/grewordsapp  # Replace with your actual repo
+    branch: main
+    rootDir: backend
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.9.0
       - key: FLASK_ENV
         value: production
-      - key: DATABASE_URL
-        sync: false 
+      - key: FLASK_APP
+        value: app.py
+      - key: PORT
+        value: 5000  # Optional fallback for local dev
+      - fromDatabase:
+          name: grewords-db
+          property: connectionString
+          key: DATABASE_URL
+
+databases:
+  - name: grewords-db
+    databaseName: grewords
+    user: grewordsuser
+    plan: free

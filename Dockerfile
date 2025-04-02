@@ -20,6 +20,8 @@ USER appuser
 ENV FLASK_APP=app.py
 ENV FLASK_ENV=production
 
+# Expose default port (for docs only)
 EXPOSE 5000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "app:app"]
+# Correct CMD with shell expansion
+CMD bash -c "exec gunicorn --bind 0.0.0.0:${PORT:-5000} app:app"

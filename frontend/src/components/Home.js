@@ -8,7 +8,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
- Grid,
+  Grid,
   Paper,
   Dialog,
   DialogTitle,
@@ -31,37 +31,29 @@ const Home = ({ onStartTest }) => {
   });
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
   const { apiUrl } = config;
 
-  const fetchStats = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`${apiUrl}/api/stats`);
-      if (!response.ok) throw new Error('Failed to fetch stats');
-      const data = await response.json();
-      setStats(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchGroups = async () => {
-    try {
-      const response = await fetch(`${apiUrl}/api/groups`);
-      if (!response.ok) throw new Error('Failed to fetch groups');
-      const data = await response.json();
-      setGroups(data);
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
   useEffect(() => {
-    fetchGroups();
-    fetchStats();
+    const fetchGroupsAndStats = async () => {
+      try {
+        const groupsRes = await fetch(`${apiUrl}/api/groups`);
+        if (!groupsRes.ok) throw new Error('Failed to fetch groups');
+        const groupsData = await groupsRes.json();
+        setGroups(groupsData);
+
+        setLoading(true);
+        const statsRes = await fetch(`${apiUrl}/api/stats`);
+        if (!statsRes.ok) throw new Error('Failed to fetch stats');
+        const statsData = await statsRes.json();
+        setStats(statsData);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchGroupsAndStats();
   }, [apiUrl]);
 
   const handleResetStats = async () => {
@@ -70,7 +62,11 @@ const Home = ({ onStartTest }) => {
         method: 'POST',
       });
       if (!response.ok) throw new Error('Failed to reset stats');
-      await fetchStats();
+      // Re-fetch stats after reset
+      const statsRes = await fetch(`${apiUrl}/api/stats`);
+      if (!statsRes.ok) throw new Error('Failed to fetch stats');
+      const statsData = await statsRes.json();
+      setStats(statsData);
       setResetDialogOpen(false);
     } catch (err) {
       console.error('Error resetting stats:', err);

@@ -23,11 +23,8 @@ const Test = () => {
   const [showMeaning, setShowMeaning] = useState(false);
   const [progress, setProgress] = useState(0);
   const [testComplete, setTestComplete] = useState(false);
-  const [testSessionId, setTestSessionId] = useState(null);
   const [testResults, setTestResults] = useState(null);
   const [showResultsDialog, setShowResultsDialog] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const { apiUrl } = config;
 
   const currentWord = words[currentIndex];
@@ -49,10 +46,8 @@ const Test = () => {
 
         const data = await response.json();
         setWords(data);
-        setLoading(false);
       } catch (err) {
-        setError(err.message);
-        setLoading(false);
+        console.error('Failed to fetch test words:', err);
       }
     };
 
@@ -68,7 +63,7 @@ const Test = () => {
 
   const handleAnswer = async (isCorrect) => {
     const currentWord = words[currentIndex];
-    
+
     try {
       await fetch(`${apiUrl}/api/answer`, {
         method: 'POST',
@@ -78,16 +73,15 @@ const Test = () => {
         body: JSON.stringify({
           word_id: currentWord.id,
           correct: isCorrect,
-          test_session_id: testSessionId
         }),
       });
 
       if (currentIndex < words.length - 1) {
-        setCurrentIndex(currentIndex + 1);
+        const newIndex = currentIndex + 1;
+        setCurrentIndex(newIndex);
         setShowMeaning(false);
-        setProgress(((currentIndex + 1) / words.length) * 100);
+        setProgress(((newIndex) / words.length) * 100);
       } else {
-        // Test is complete, send test completion request
         await completeTest();
       }
     } catch (error) {
@@ -102,13 +96,11 @@ const Test = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          test_session_id: testSessionId
-        }),
+        body: JSON.stringify({}),
       });
-      
+
       if (!response.ok) throw new Error('Failed to complete test');
-      
+
       const results = await response.json();
       setTestResults(results);
       setTestComplete(true);
@@ -154,14 +146,10 @@ const Test = () => {
 
   return (
     <Box sx={{ maxWidth: 600, mx: 'auto', p: 2 }}>
-      <LinearProgress 
-        variant="determinate" 
-        value={progress} 
-        sx={{ mb: 3 }}
-      />
-      
-      <Card 
-        sx={{ 
+      <LinearProgress variant="determinate" value={progress} sx={{ mb: 3 }} />
+
+      <Card
+        sx={{
           minHeight: 300,
           display: 'flex',
           flexDirection: 'column',
@@ -183,24 +171,11 @@ const Test = () => {
         </CardContent>
       </Card>
 
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        gap: 2, 
-        mt: 3 
-      }}>
-        <IconButton 
-          color="error" 
-          size="large"
-          onClick={() => handleAnswer(false)}
-        >
+      <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 3 }}>
+        <IconButton color="error" size="large" onClick={() => handleAnswer(false)}>
           <CloseIcon />
         </IconButton>
-        <IconButton 
-          color="success" 
-          size="large"
-          onClick={() => handleAnswer(true)}
-        >
+        <IconButton color="success" size="large" onClick={() => handleAnswer(true)}>
           <CheckIcon />
         </IconButton>
       </Box>
@@ -209,7 +184,6 @@ const Test = () => {
         Click the card to flip, or use the buttons to mark as correct/incorrect
       </Typography>
 
-      {/* Test Results Dialog */}
       <Dialog open={showResultsDialog} onClose={handleCloseResults}>
         <DialogTitle>Test Results</DialogTitle>
         <DialogContent>

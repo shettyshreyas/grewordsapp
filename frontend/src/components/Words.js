@@ -31,29 +31,11 @@ const Words = () => {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const { apiUrl } = config;
 
-  const fetchWords = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`${apiUrl}/api/words?group=${selectedGroup}&search=${searchTerm}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch words');
-      }
-      const data = await response.json();
-      setWords(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
     const fetchGroups = async () => {
       try {
         const response = await fetch(`${apiUrl}/api/groups`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch groups');
-        }
+        if (!response.ok) throw new Error('Failed to fetch groups');
         const data = await response.json();
         setGroups(data);
       } catch (err) {
@@ -65,6 +47,20 @@ const Words = () => {
   }, [apiUrl]);
 
   useEffect(() => {
+    const fetchWords = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(`${apiUrl}/api/words?group=${selectedGroup}&search=${searchTerm}`);
+        if (!response.ok) throw new Error('Failed to fetch words');
+        const data = await response.json();
+        setWords(data);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchWords();
   }, [apiUrl, selectedGroup, searchTerm]);
 
@@ -83,7 +79,10 @@ const Words = () => {
       });
       if (!response.ok) throw new Error('Failed to refresh word');
       showSnackbar('Word meaning refreshed successfully');
-      fetchWords();
+      // Re-fetch words after refresh
+      const updatedResponse = await fetch(`${apiUrl}/api/words?group=${selectedGroup}&search=${searchTerm}`);
+      const updatedData = await updatedResponse.json();
+      setWords(updatedData);
     } catch (error) {
       console.error('Error refreshing word:', error);
       showSnackbar('Failed to refresh word meaning', 'error');
@@ -92,14 +91,16 @@ const Words = () => {
 
   const handleDeleteWord = async (wordId) => {
     if (!window.confirm('Are you sure you want to delete this word?')) return;
-    
+
     try {
       const response = await fetch(`${apiUrl}/api/words/${wordId}`, {
         method: 'DELETE',
       });
       if (!response.ok) throw new Error('Failed to delete word');
       showSnackbar('Word deleted successfully');
-      fetchWords();
+      const updatedResponse = await fetch(`${apiUrl}/api/words?group=${selectedGroup}&search=${searchTerm}`);
+      const updatedData = await updatedResponse.json();
+      setWords(updatedData);
     } catch (error) {
       console.error('Error deleting word:', error);
       showSnackbar('Failed to delete word', 'error');
@@ -117,7 +118,7 @@ const Words = () => {
 
   const handleRefreshAll = async () => {
     if (!window.confirm('Are you sure you want to refresh all word meanings? This may take a while.')) return;
-    
+
     try {
       setLoading(true);
       const response = await fetch(`${apiUrl}/api/words/refresh-all`, {
@@ -126,7 +127,9 @@ const Words = () => {
       if (!response.ok) throw new Error('Failed to refresh words');
       const data = await response.json();
       showSnackbar(data.message);
-      fetchWords();
+      const updatedResponse = await fetch(`${apiUrl}/api/words?group=${selectedGroup}&search=${searchTerm}`);
+      const updatedData = await updatedResponse.json();
+      setWords(updatedData);
     } catch (error) {
       console.error('Error refreshing words:', error);
       showSnackbar('Failed to refresh word meanings', 'error');
@@ -138,9 +141,9 @@ const Words = () => {
   const columns = [
     { field: 'word', headerName: 'Word', width: 150 },
     { field: 'group', headerName: 'Group', width: 150 },
-    { 
-      field: 'meaning', 
-      headerName: 'Meaning', 
+    {
+      field: 'meaning',
+      headerName: 'Meaning',
       width: 400,
       renderCell: (params) => (
         <Box>
@@ -152,7 +155,7 @@ const Words = () => {
             </Typography>
           )}
         </Box>
-      )
+      ),
     },
     {
       field: 'actions',
@@ -164,7 +167,7 @@ const Words = () => {
             onClick={() => handleEditWord(params.row)}
             size="small"
             title="Edit"
-            color={params.row.meaning ? "primary" : "error"}
+            color={params.row.meaning ? 'primary' : 'error'}
           >
             <EditIcon />
           </IconButton>
@@ -264,4 +267,4 @@ const Words = () => {
   );
 };
 
-export default Words; 
+export default Words;

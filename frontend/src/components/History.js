@@ -33,6 +33,7 @@ import config from '../config';
 
 const History = () => {
   const [historyData, setHistoryData] = useState([]);
+  const [problematicWords, setProblematicWords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedTab, setSelectedTab] = useState(0);
@@ -56,6 +57,28 @@ const History = () => {
 
     fetchHistoryData();
   }, [apiUrl]);
+
+  useEffect(() => {
+    const fetchProblematicWords = async () => {
+      if (selectedTab === 2) { // Only fetch when Problematic Words tab is selected
+        try {
+          setLoading(true);
+          const response = await fetch(`${apiUrl}/api/problematic-words`);
+          if (!response.ok) {
+            throw new Error('Failed to fetch problematic words');
+          }
+          const data = await response.json();
+          setProblematicWords(data);
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchProblematicWords();
+  }, [apiUrl, selectedTab]);
 
   const handleTabChange = (event, newValue) => {
     setSelectedTab(newValue);
@@ -221,48 +244,37 @@ const History = () => {
       )}
 
       {selectedTab === 2 && (
-        <Box>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              Words That Need Extra Attention
-            </Typography>
-            <Typography variant="body2" color="text.secondary" paragraph>
-              These words have been answered incorrectly multiple times and may need extra practice.
-            </Typography>
-            
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Word</TableCell>
-                    <TableCell>Group</TableCell>
-                    <TableCell>Incorrect Count</TableCell>
-                    <TableCell>Last Tested</TableCell>
-                    <TableCell>Accuracy</TableCell>
+        <Paper sx={{ p: 2 }}>
+          <Typography variant="h6" gutterBottom>
+            Words Needing Review
+          </Typography>
+          <TableContainer>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Word</TableCell>
+                  <TableCell>Group</TableCell>
+                  <TableCell>Incorrect Count</TableCell>
+                  <TableCell>Last Tested</TableCell>
+                  <TableCell>Accuracy</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {problematicWords.map((word) => (
+                  <TableRow key={word.id}>
+                    <TableCell>{word.word}</TableCell>
+                    <TableCell>{word.group}</TableCell>
+                    <TableCell>{word.incorrect_count}</TableCell>
+                    <TableCell>
+                      {word.last_tested ? new Date(word.last_tested).toLocaleDateString() : 'Never'}
+                    </TableCell>
+                    <TableCell>{word.accuracy.toFixed(1)}%</TableCell>
                   </TableRow>
-                </TableHead>
-                <TableBody>
-                  {historyData.problematic_words.map((word) => (
-                    <TableRow key={word.id}>
-                      <TableCell>{word.word}</TableCell>
-                      <TableCell>{word.group}</TableCell>
-                      <TableCell>{word.incorrect_count}</TableCell>
-                      <TableCell>{new Date(word.last_tested).toLocaleDateString()}</TableCell>
-                      <TableCell>{word.accuracy.toFixed(1)}%</TableCell>
-                    </TableRow>
-                  ))}
-                  {historyData.problematic_words.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={5} align="center">
-                        No problematic words found. Great job!
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Paper>
-        </Box>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
       )}
     </Box>
   );

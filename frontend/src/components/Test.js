@@ -73,6 +73,7 @@ const Test = () => {
         body: JSON.stringify({
           word_id: currentWord.id,
           correct: isCorrect,
+          test_session_id: currentWord.test_session_id
         }),
       });
 
@@ -82,21 +83,23 @@ const Test = () => {
         setShowMeaning(false);
         setProgress(((newIndex) / words.length) * 100);
       } else {
-        await completeTest();
+        await completeTest(currentWord.test_session_id);
       }
     } catch (error) {
       console.error('Error submitting answer:', error);
     }
   };
 
-  const completeTest = async () => {
+  const completeTest = async (testSessionId) => {
     try {
       const response = await fetch(`${apiUrl}/api/test-complete`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          test_session_id: testSessionId
+        }),
       });
 
       if (!response.ok) throw new Error('Failed to complete test');

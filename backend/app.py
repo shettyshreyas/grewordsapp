@@ -252,26 +252,41 @@ def submit_answer():
 @app.route('/api/test-complete', methods=['POST'])
 @log_db_commit
 def test_complete():
-    data = request.json
-    test_session_id = data.get('test_session_id')
-    
-    test_session = TestSession.query.get_or_404(test_session_id)
-    test_session.end_time = datetime.utcnow()
-    
-    # Count correct answers
-    correct_count = WordProgress.query.filter_by(
-        test_session_id=test_session_id,
-        is_correct=True
-    ).count()
-    
-    test_session.correct_words = correct_count
-    
-    return jsonify({
-        'message': 'Test completed successfully',
-        'total_words': test_session.total_words,
-        'correct_words': test_session.correct_words,
-        'accuracy': (test_session.correct_words / test_session.total_words * 100) if test_session.total_words > 0 else 0
-    })
+    try:
+        data = request.json
+        test_session_id = data.get('test_session_id')
+        
+        if not test_session_id:
+            logger.error("No test_session_id provided in request")
+            return jsonify({'error': 'test_session_id is required'}), 400
+        
+        logger.info(f"Processing test completion for session {test_session_id}")
+        
+        test_session = TestSession.query.get_or_404(test_session_id)
+        test_session.end_time = datetime.utcnow()
+        
+        # Count correct answers
+        correct_count = WordProgress.query.filter_by(
+            test_session_id=test_session_id,
+            is_correct=True
+        ).count()
+        
+        test_session.correct_words = correct_count
+        logger.info(f"Test session {test_session_id} completed with {correct_count}/{test_session.total_words} correct answers")
+        
+        # Calculate accuracy
+        accuracy = (test_session.correct_words / test_session.total_words * 100) if test_session.total_words > 0 else 0
+        
+        return jsonify({
+            'message': 'Test completed successfully',
+            'total_words': test_session.total_words,
+            'correct_words': test_session.correct_words,
+            'accuracy': accuracy
+        })
+        
+    except Exception as e:
+        logger.error(f"Error completing test: {str(e)}", exc_info=True)
+        return jsonify({'error': f'Failed to complete test: {str(e)}'}), 500
 
 @app.route('/api/progress', methods=['POST'])
 def update_progress():

@@ -92,9 +92,16 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            github.rest.reactions.createForCommitComment({
+            const comment = await github.rest.repos.createCommitComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              comment_id: context.sha,
-              content: 'rocket'
-            })
+              commit_sha: context.sha,
+              body: '🚀 Deployed to Render successfully!',
+            });
+
+            await github.rest.reactions.createForCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: comment.data.id,
+              content: 'rocket',
+            });

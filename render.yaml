@@ -3,7 +3,7 @@ services:
     name: grewords-backend
     env: docker
     plan: free
-    repo: https://github.com/yourusername/grewordsapp  # Replace with your actual repo
+    repo: https://github.com/shettyshreyas/grewordsapp  
     branch: main
     rootDir: backend
     envVars:

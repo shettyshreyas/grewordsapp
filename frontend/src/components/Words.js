@@ -13,6 +13,7 @@ import {
   Button,
   IconButton,
   Snackbar,
+  Grid,
 } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -32,7 +33,11 @@ const Words = ({ apiUrl }) => {
 
   useEffect(() => {
     fetchGroups();
-  }, [apiUrl]);
+  }, [apiUrl, fetchGroups]);
+
+  useEffect(() => {
+    fetchWords();
+  }, [apiUrl, fetchWords, selectedGroup, searchTerm]);
 
   const showSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
@@ -138,14 +143,6 @@ const Words = ({ apiUrl }) => {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    const debounceTimer = setTimeout(() => {
-      fetchWords();
-    }, 500);
-
-    return () => clearTimeout(debounceTimer);
-  }, [searchTerm, selectedGroup]);
 
   const columns = [
     { field: 'word', headerName: 'Word', width: 150 },

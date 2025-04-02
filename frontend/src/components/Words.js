@@ -137,7 +137,21 @@ const Words = ({ apiUrl }) => {
 
   const columns = [
     { field: 'word', headerName: 'Word', width: 200 },
-    { field: 'meaning', headerName: 'Meaning', width: 400 },
+    { 
+        field: 'meaning', 
+        headerName: 'Meaning', 
+        width: 400,
+        renderCell: (params) => (
+            <Box>
+                <Typography>{params.value}</Typography>
+                {params.row.synonyms && (
+                    <Typography variant="body2" color="textSecondary">
+                        Synonyms: {JSON.parse(params.row.synonyms).join(', ')}
+                    </Typography>
+                )}
+            </Box>
+        )
+    },
     { field: 'group', headerName: 'Group', width: 150 },
     { 
       field: 'correct_count', 

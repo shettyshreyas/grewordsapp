@@ -29,48 +29,36 @@ import {
   BarChart,
   Bar,
 } from 'recharts';
+import config from '../config';
 
-const History = ({ apiUrl }) => {
+const History = () => {
+  const [historyData, setHistoryData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [historyData, setHistoryData] = useState(null);
-  const [problematicWords, setProblematicWords] = useState([]);
-  const [activeTab, setActiveTab] = useState(0);
+  const [selectedTab, setSelectedTab] = useState(0);
+  const { apiUrl } = config;
 
   useEffect(() => {
-    fetchHistoryData();
-  }, [apiUrl, fetchHistoryData]);
+    const fetchHistoryData = async () => {
+      try {
+        const response = await fetch(`${apiUrl}/api/history`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch history data');
+        }
+        const data = await response.json();
+        setHistoryData(data);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const fetchHistoryData = async () => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      // Fetch history data
-      const historyResponse = await fetch(`${apiUrl}/api/history`);
-      if (!historyResponse.ok) {
-        throw new Error('Failed to fetch history data');
-      }
-      const historyData = await historyResponse.json();
-      setHistoryData(historyData);
-      
-      // Fetch problematic words
-      const problematicResponse = await fetch(`${apiUrl}/api/problematic-words`);
-      if (!problematicResponse.ok) {
-        throw new Error('Failed to fetch problematic words');
-      }
-      const problematicData = await problematicResponse.json();
-      setProblematicWords(problematicData);
-    } catch (error) {
-      console.error('Error fetching history data:', error);
-      setError('Failed to fetch history data. Please try again later.');
-    } finally {
-      setLoading(false);
-    }
-  };
+    fetchHistoryData();
+  }, [apiUrl]);
 
   const handleTabChange = (event, newValue) => {
-    setActiveTab(newValue);
+    setSelectedTab(newValue);
   };
 
   if (loading) {
@@ -104,7 +92,7 @@ const History = ({ apiUrl }) => {
       </Typography>
 
       <Tabs
-        value={activeTab}
+        value={selectedTab}
         onChange={handleTabChange}
         sx={{ mb: 3 }}
       >
@@ -113,7 +101,7 @@ const History = ({ apiUrl }) => {
         <Tab label="Problematic Words" />
       </Tabs>
 
-      {activeTab === 0 && (
+      {selectedTab === 0 && (
         <Grid container spacing={3}>
           <Grid item xs={12} md={4}>
             <Card>
@@ -186,7 +174,7 @@ const History = ({ apiUrl }) => {
         </Grid>
       )}
 
-      {activeTab === 1 && (
+      {selectedTab === 1 && (
         <Box>
           <Paper sx={{ p: 2, mb: 3 }}>
             <Typography variant="h6" gutterBottom>
@@ -232,7 +220,7 @@ const History = ({ apiUrl }) => {
         </Box>
       )}
 
-      {activeTab === 2 && (
+      {selectedTab === 2 && (
         <Box>
           <Paper sx={{ p: 2 }}>
             <Typography variant="h6" gutterBottom>
@@ -254,7 +242,7 @@ const History = ({ apiUrl }) => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {problematicWords.map((word) => (
+                  {historyData.problematic_words.map((word) => (
                     <TableRow key={word.id}>
                       <TableCell>{word.word}</TableCell>
                       <TableCell>{word.group}</TableCell>
@@ -263,7 +251,7 @@ const History = ({ apiUrl }) => {
                       <TableCell>{word.accuracy.toFixed(1)}%</TableCell>
                     </TableRow>
                   ))}
-                  {problematicWords.length === 0 && (
+                  {historyData.problematic_words.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={5} align="center">
                         No problematic words found. Great job!

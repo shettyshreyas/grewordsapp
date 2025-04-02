@@ -7,11 +7,11 @@ import {
   Paper,
   Alert,
   CircularProgress,
-  TextField,
 } from '@mui/material';
 import { CloudUpload as CloudUploadIcon, Download as DownloadIcon } from '@mui/icons-material';
+import config from '../config';
 
-const Upload = ({ apiUrl }) => {
+const Upload = () => {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
@@ -40,7 +40,7 @@ const Upload = ({ apiUrl }) => {
     formData.append('file', file);
 
     try {
-      const response = await fetch(`${apiUrl}/api/upload`, {
+      const response = await fetch(`${config.apiUrl}/api/upload`, {
         method: 'POST',
         body: formData,
       });

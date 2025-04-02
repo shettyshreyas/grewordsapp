@@ -5,7 +5,6 @@ import {
   Card,
   CardContent,
   Typography,
-  Paper,
   LinearProgress,
   IconButton,
   Dialog,
@@ -14,11 +13,11 @@ import {
   DialogActions,
   Grid,
 } from '@mui/material';
-import FlipIcon from '@mui/icons-material/Flip';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
+import config from '../config';
 
-const Test = ({ apiUrl }) => {
+const Test = () => {
   const [words, setWords] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showMeaning, setShowMeaning] = useState(false);
@@ -27,34 +26,41 @@ const Test = ({ apiUrl }) => {
   const [testSessionId, setTestSessionId] = useState(null);
   const [testResults, setTestResults] = useState(null);
   const [showResultsDialog, setShowResultsDialog] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const { apiUrl } = config;
+
+  const currentWord = words[currentIndex];
 
   useEffect(() => {
+    const fetchTestWords = async (groups, wordCount) => {
+      try {
+        const response = await fetch(`${apiUrl}/api/test`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ groups, word_count: wordCount }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch test words');
+        }
+
+        const data = await response.json();
+        setWords(data);
+        setLoading(false);
+      } catch (err) {
+        setError(err.message);
+        setLoading(false);
+      }
+    };
+
     const testData = JSON.parse(localStorage.getItem('testData'));
     if (testData) {
       fetchTestWords(testData.selectedGroups, testData.wordCount);
     }
-  }, [apiUrl, fetchTestWords]);
-
-  const fetchTestWords = async (groups, wordCount) => {
-    try {
-      const response = await fetch(`${apiUrl}/api/test`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ groups, word_count: wordCount }),
-      });
-      if (!response.ok) throw new Error('Failed to fetch test words');
-      const data = await response.json();
-      setWords(data);
-      setTestSessionId(data[0]?.test_session_id || null);
-      setProgress(0);
-      setCurrentIndex(0);
-      setTestComplete(false);
-    } catch (error) {
-      console.error('Error fetching test words:', error);
-    }
-  };
+  }, [apiUrl]);
 
   const handleFlip = () => {
     setShowMeaning(!showMeaning);
@@ -145,8 +151,6 @@ const Test = ({ apiUrl }) => {
       </Box>
     );
   }
-
-  const currentWord = words[currentIndex];
 
   return (
     <Box sx={{ maxWidth: 600, mx: 'auto', p: 2 }}>

@@ -8,36 +8,65 @@ import {
   Select,
   MenuItem,
   Typography,
-  CircularProgress,
   Alert,
   Button,
   IconButton,
   Snackbar,
-  Grid,
 } from '@mui/material';
 import { DataGrid } from '@mui/x-data-grid';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import WordEdit from './WordEdit';
+import config from '../config';
 
-const Words = ({ apiUrl }) => {
+const Words = () => {
   const [words, setWords] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedGroup, setSelectedGroup] = useState('');
   const [groups, setGroups] = useState([]);
+  const [selectedGroup, setSelectedGroup] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [editWord, setEditWord] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-  const [editingWord, setEditingWord] = useState(null);
+  const { apiUrl } = config;
+
+  const fetchWords = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${apiUrl}/api/words?group=${selectedGroup}&search=${searchTerm}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch words');
+      }
+      const data = await response.json();
+      setWords(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
+    const fetchGroups = async () => {
+      try {
+        const response = await fetch(`${apiUrl}/api/groups`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch groups');
+        }
+        const data = await response.json();
+        setGroups(data);
+      } catch (err) {
+        setError(err.message);
+      }
+    };
+
     fetchGroups();
-  }, [apiUrl, fetchGroups]);
+  }, [apiUrl]);
 
   useEffect(() => {
     fetchWords();
-  }, [apiUrl, fetchWords, selectedGroup, searchTerm]);
+  }, [apiUrl, selectedGroup, searchTerm]);
 
   const showSnackbar = (message, severity = 'success') => {
     setSnackbar({ open: true, message, severity });
@@ -45,44 +74,6 @@ const Words = ({ apiUrl }) => {
 
   const handleCloseSnackbar = () => {
     setSnackbar({ ...snackbar, open: false });
-  };
-
-  const fetchGroups = async () => {
-    try {
-      const response = await fetch(`${apiUrl}/api/groups`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch groups: ${response.statusText}`);
-      }
-      const data = await response.json();
-      setGroups(data);
-    } catch (error) {
-      console.error('Error fetching groups:', error);
-      setError('Failed to fetch groups. Please try again later.');
-    }
-  };
-
-  const fetchWords = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const params = new URLSearchParams();
-      if (searchTerm) params.append('search', searchTerm);
-      if (selectedGroup) params.append('group', selectedGroup);
-
-      const response = await fetch(`${apiUrl}/api/words?${params}`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch words: ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      setWords(data);
-    } catch (error) {
-      console.error('Error fetching words:', error);
-      setError('Failed to fetch words. Please try again later.');
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handleRefreshWord = async (wordId) => {
@@ -116,7 +107,7 @@ const Words = ({ apiUrl }) => {
   };
 
   const handleEditWord = (word) => {
-    setEditingWord(word);
+    setEditWord(word);
   };
 
   const handleSaveWord = (updatedWord) => {
@@ -260,11 +251,11 @@ const Words = ({ apiUrl }) => {
         message={snackbar.message}
       />
 
-      {editingWord && (
+      {editWord && (
         <WordEdit
-          word={editingWord}
+          word={editWord}
           open={true}
-          onClose={() => setEditingWord(null)}
+          onClose={() => setEditWord(null)}
           onSave={handleSaveWord}
           apiUrl={apiUrl}
         />

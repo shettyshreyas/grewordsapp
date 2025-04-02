@@ -3,7 +3,7 @@ services:
     name: grewords-backend
     env: docker
     plan: free
-    repo: https://github.com/shettyshreyas/grewordsapp  
+    repo: https://github.com/shettyshreyas/grewordsapp
     branch: main
     rootDir: backend
     envVars:
@@ -11,10 +11,10 @@ services:
         value: production
       - key: FLASK_APP
         value: app.py
-      - fromDatabase:
+      - key: DATABASE_URL
+        fromDatabase:
           name: grewords-db
           property: connectionString
-          key: DATABASE_URL
 
 databases:
   - name: grewords-db

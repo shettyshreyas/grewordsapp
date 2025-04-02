@@ -1,85 +1,144 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
-  Typography,
   Button,
-  IconButton,
-  LinearProgress,
+  Card,
+  CardContent,
+  Typography,
   Paper,
+  LinearProgress,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Grid,
 } from '@mui/material';
-import {
-  Check as CheckIcon,
-  Close as CloseIcon,
-  NavigateNext as NextIcon,
-} from '@mui/icons-material';
-import axios from 'axios';
+import FlipIcon from '@mui/icons-material/Flip';
+import CheckIcon from '@mui/icons-material/Check';
+import CloseIcon from '@mui/icons-material/Close';
 
-function Test() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { groups, wordCount } = location.state || { groups: [], wordCount: 10 };
+const Test = ({ apiUrl }) => {
   const [words, setWords] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showMeaning, setShowMeaning] = useState(false);
   const [progress, setProgress] = useState(0);
-
-  const fetchWords = useCallback(async () => {
-    try {
-      const response = await axios.post('http://localhost:5000/api/test', {
-        groups,
-        word_count: wordCount,
-      });
-      setWords(response.data);
-      setProgress(0);
-    } catch (error) {
-      console.error('Error fetching words:', error);
-    }
-  }, [groups, wordCount]);
+  const [testComplete, setTestComplete] = useState(false);
+  const [testSessionId, setTestSessionId] = useState(null);
+  const [testResults, setTestResults] = useState(null);
+  const [showResultsDialog, setShowResultsDialog] = useState(false);
 
   useEffect(() => {
-    if (groups.length === 0) {
-      navigate('/');
-      return;
+    const testData = JSON.parse(localStorage.getItem('testData'));
+    if (testData) {
+      fetchTestWords(testData.selectedGroups, testData.wordCount);
     }
-    fetchWords();
-  }, [groups, wordCount, navigate, fetchWords]);
+  }, [apiUrl]);
 
-  const handleResponse = async (isCorrect) => {
-    if (currentIndex >= words.length) return;
-
+  const fetchTestWords = async (groups, wordCount) => {
     try {
-      await axios.post('http://localhost:5000/api/progress', {
-        word_id: words[currentIndex].id,
-        is_correct: isCorrect,
+      const response = await fetch(`${apiUrl}/api/test`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ groups, word_count: wordCount }),
+      });
+      if (!response.ok) throw new Error('Failed to fetch test words');
+      const data = await response.json();
+      setWords(data);
+      setTestSessionId(data[0]?.test_session_id || null);
+      setProgress(0);
+      setCurrentIndex(0);
+      setTestComplete(false);
+    } catch (error) {
+      console.error('Error fetching test words:', error);
+    }
+  };
+
+  const handleFlip = () => {
+    setShowMeaning(!showMeaning);
+  };
+
+  const handleAnswer = async (isCorrect) => {
+    const currentWord = words[currentIndex];
+    
+    try {
+      await fetch(`${apiUrl}/api/answer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          word_id: currentWord.id,
+          correct: isCorrect,
+          test_session_id: testSessionId
+        }),
       });
 
-      setProgress(((currentIndex + 1) / words.length) * 100);
-      setCurrentIndex(currentIndex + 1);
-      setShowMeaning(false);
+      if (currentIndex < words.length - 1) {
+        setCurrentIndex(currentIndex + 1);
+        setShowMeaning(false);
+        setProgress(((currentIndex + 1) / words.length) * 100);
+      } else {
+        // Test is complete, send test completion request
+        await completeTest();
+      }
     } catch (error) {
-      console.error('Error updating progress:', error);
+      console.error('Error submitting answer:', error);
     }
+  };
+
+  const completeTest = async () => {
+    try {
+      const response = await fetch(`${apiUrl}/api/test-complete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          test_session_id: testSessionId
+        }),
+      });
+      
+      if (!response.ok) throw new Error('Failed to complete test');
+      
+      const results = await response.json();
+      setTestResults(results);
+      setTestComplete(true);
+      setShowResultsDialog(true);
+    } catch (error) {
+      console.error('Error completing test:', error);
+      setTestComplete(true);
+    }
+  };
+
+  const handleCloseResults = () => {
+    setShowResultsDialog(false);
+    localStorage.removeItem('testData');
+    window.location.reload();
   };
 
   if (words.length === 0) {
     return (
-      <Box sx={{ textAlign: 'center', mt: 4 }}>
-        <Typography variant="h5">Loading words...</Typography>
-      </Box>
+      <Typography variant="h6" align="center">
+        No words available for testing. Please select groups and start a new test.
+      </Typography>
     );
   }
 
-  if (currentIndex >= words.length) {
+  if (testComplete && !showResultsDialog) {
     return (
-      <Box sx={{ textAlign: 'center', mt: 4 }}>
+      <Box sx={{ textAlign: 'center' }}>
         <Typography variant="h5" gutterBottom>
           Test Complete!
         </Typography>
         <Button
           variant="contained"
-          onClick={() => navigate('/')}
-          startIcon={<NextIcon />}
+          onClick={() => {
+            localStorage.removeItem('testData');
+            window.location.reload();
+          }}
         >
           Start New Test
         </Button>
@@ -90,121 +149,90 @@ function Test() {
   const currentWord = words[currentIndex];
 
   return (
-    <Box>
-      {/* Progress bar */}
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Progress
-        </Typography>
-        <LinearProgress
-          variant="determinate"
-          value={progress}
-          sx={{ height: 10, borderRadius: 5 }}
-        />
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          {currentIndex + 1} of {words.length} words
-        </Typography>
-      </Paper>
-
-      {/* Flip card */}
-      <Box
-        sx={{
-          perspective: '1000px',
-          width: '100%',
-          maxWidth: 400,
-          height: 250,
-          margin: '0 auto',
+    <Box sx={{ maxWidth: 600, mx: 'auto', p: 2 }}>
+      <LinearProgress 
+        variant="determinate" 
+        value={progress} 
+        sx={{ mb: 3 }}
+      />
+      
+      <Card 
+        sx={{ 
+          minHeight: 300,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          cursor: 'pointer',
         }}
+        onClick={handleFlip}
       >
-        <Box
-          onClick={() => setShowMeaning(!showMeaning)}
-          sx={{
-            width: '100%',
-            height: '100%',
-            position: 'relative',
-            transformStyle: 'preserve-3d',
-            transition: 'transform 0.6s',
-            transform: showMeaning ? 'rotateY(180deg)' : 'rotateY(0deg)',
-            cursor: 'pointer',
-          }}
-        >
-          {/* Front Side */}
-          <Box
-            sx={{
-              position: 'absolute',
-              width: '100%',
-              height: '100%',
-              backfaceVisibility: 'hidden',
-              backgroundColor: 'white',
-              borderRadius: 2,
-              boxShadow: 3,
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center',
-              alignItems: 'center',
-              p: 2,
-            }}
-          >
+        <CardContent sx={{ textAlign: 'center' }}>
+          {!showMeaning ? (
             <Typography variant="h4" gutterBottom>
               {currentWord.word}
             </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Click to see meaning
-            </Typography>
-          </Box>
-
-          {/* Back Side */}
-          <Box
-            sx={{
-              position: 'absolute',
-              width: '100%',
-              height: '100%',
-              backfaceVisibility: 'hidden',
-              transform: 'rotateY(180deg)',
-              backgroundColor: 'white',
-              borderRadius: 2,
-              boxShadow: 3,
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center',
-              alignItems: 'center',
-              p: 2,
-            }}
-          >
-            <Typography variant="h6" gutterBottom>
-              Meaning
-            </Typography>
-            <Typography variant="body1" paragraph>
+          ) : (
+            <Typography variant="h6" color="text.secondary">
               {currentWord.meaning}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Click to see word again
-            </Typography>
-          </Box>
-        </Box>
-      </Box>
+          )}
+        </CardContent>
+      </Card>
 
-      {/* Buttons */}
-      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, gap: 2 }}>
-        <IconButton
-          color="error"
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        gap: 2, 
+        mt: 3 
+      }}>
+        <IconButton 
+          color="error" 
           size="large"
-          onClick={() => handleResponse(false)}
-          sx={{ bgcolor: 'error.light', '&:hover': { bgcolor: 'error.main' } }}
+          onClick={() => handleAnswer(false)}
         >
           <CloseIcon />
         </IconButton>
-        <IconButton
-          color="success"
+        <IconButton 
+          color="success" 
           size="large"
-          onClick={() => handleResponse(true)}
-          sx={{ bgcolor: 'success.light', '&:hover': { bgcolor: 'success.main' } }}
+          onClick={() => handleAnswer(true)}
         >
           <CheckIcon />
         </IconButton>
       </Box>
+
+      <Typography variant="body2" align="center" sx={{ mt: 2 }}>
+        Click the card to flip, or use the buttons to mark as correct/incorrect
+      </Typography>
+
+      {/* Test Results Dialog */}
+      <Dialog open={showResultsDialog} onClose={handleCloseResults}>
+        <DialogTitle>Test Results</DialogTitle>
+        <DialogContent>
+          {testResults && (
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12}>
+                <Typography variant="h6" align="center" gutterBottom>
+                  {testResults.accuracy.toFixed(1)}% Accuracy
+                </Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="subtitle1">Words Tested:</Typography>
+                <Typography variant="h5">{testResults.total_words}</Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="subtitle1">Correct Answers:</Typography>
+                <Typography variant="h5">{testResults.correct_words}</Typography>
+              </Grid>
+            </Grid>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseResults}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
-}
+};
 
 export default Test;

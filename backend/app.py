@@ -301,11 +301,31 @@ def update_progress():
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
     words = Word.query.all()
+    
+    # Calculate words mastered (words with correct_count >= 3)
+    words_mastered = len([w for w in words if w.correct_count >= 3])
+    
+    # Calculate average accuracy from test sessions
+    test_sessions = TestSession.query.filter(TestSession.end_time.isnot(None)).all()
+    total_accuracy = 0
+    total_sessions = len(test_sessions)
+    
+    for session in test_sessions:
+        if session.total_words > 0:
+            session_accuracy = (session.correct_words / session.total_words) * 100
+            total_accuracy += session_accuracy
+    
+    average_accuracy = total_accuracy / total_sessions if total_sessions > 0 else 0
+    
     stats = {
         'total_words': len(words),
         'words_to_review': len([w for w in words if w.incorrect_count > 0]),
-        'groups': db.session.query(Word.group).distinct().count()
+        'groups': db.session.query(Word.group).distinct().count(),
+        'words_mastered': words_mastered,
+        'average_accuracy': average_accuracy
     }
+    
+    logger.info(f"Stats calculated: {stats}")
     return jsonify(stats)
 
 @app.route('/api/words-to-review', methods=['GET'])

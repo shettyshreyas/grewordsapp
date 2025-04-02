@@ -23,7 +23,8 @@ ENV FLASK_APP=app.py
 ENV FLASK_ENV=production
 
 # Expose the port
-EXPOSE 5000
+# Remove hardcoded 5000
+EXPOSE $PORT
 
-# Run the application
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"] 
+# Also update CMD line:
+CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "app:app"]

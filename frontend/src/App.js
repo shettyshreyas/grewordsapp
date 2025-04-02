@@ -9,6 +9,7 @@ import Test from './components/Test';
 import Stats from './components/Stats';
 import Upload from './components/Upload';
 import Words from './components/Words';
+import History from './components/History';
 import { Tab, Tabs, Typography } from '@mui/material';
 import BackendSelector from './components/BackendSelector';
 import config from './config';
@@ -75,12 +76,14 @@ function App() {
             <Tab label="Test" />
             <Tab label="Upload" />
             <Tab label="Words" />
+            <Tab label="History" />
           </Tabs>
 
           {currentTab === 0 && <Home onStartTest={handleStartTest} apiUrl={apiUrl} />}
           {currentTab === 1 && <Test apiUrl={apiUrl} />}
           {currentTab === 2 && <Upload apiUrl={apiUrl} />}
           {currentTab === 3 && <Words apiUrl={apiUrl} />}
+          {currentTab === 4 && <History apiUrl={apiUrl} />}
         </Container>
       </Box>
     </ThemeProvider>

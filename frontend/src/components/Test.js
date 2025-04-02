@@ -8,6 +8,11 @@ import {
   Paper,
   LinearProgress,
   IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Grid,
 } from '@mui/material';
 import FlipIcon from '@mui/icons-material/Flip';
 import CheckIcon from '@mui/icons-material/Check';
@@ -19,6 +24,9 @@ const Test = ({ apiUrl }) => {
   const [showMeaning, setShowMeaning] = useState(false);
   const [progress, setProgress] = useState(0);
   const [testComplete, setTestComplete] = useState(false);
+  const [testSessionId, setTestSessionId] = useState(null);
+  const [testResults, setTestResults] = useState(null);
+  const [showResultsDialog, setShowResultsDialog] = useState(false);
 
   useEffect(() => {
     const testData = JSON.parse(localStorage.getItem('testData'));
@@ -39,6 +47,7 @@ const Test = ({ apiUrl }) => {
       if (!response.ok) throw new Error('Failed to fetch test words');
       const data = await response.json();
       setWords(data);
+      setTestSessionId(data[0]?.test_session_id || null);
       setProgress(0);
       setCurrentIndex(0);
       setTestComplete(false);
@@ -63,6 +72,7 @@ const Test = ({ apiUrl }) => {
         body: JSON.stringify({
           word_id: currentWord.id,
           correct: isCorrect,
+          test_session_id: testSessionId
         }),
       });
 
@@ -71,11 +81,42 @@ const Test = ({ apiUrl }) => {
         setShowMeaning(false);
         setProgress(((currentIndex + 1) / words.length) * 100);
       } else {
-        setTestComplete(true);
+        // Test is complete, send test completion request
+        await completeTest();
       }
     } catch (error) {
       console.error('Error submitting answer:', error);
     }
+  };
+
+  const completeTest = async () => {
+    try {
+      const response = await fetch(`${apiUrl}/api/test-complete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          test_session_id: testSessionId
+        }),
+      });
+      
+      if (!response.ok) throw new Error('Failed to complete test');
+      
+      const results = await response.json();
+      setTestResults(results);
+      setTestComplete(true);
+      setShowResultsDialog(true);
+    } catch (error) {
+      console.error('Error completing test:', error);
+      setTestComplete(true);
+    }
+  };
+
+  const handleCloseResults = () => {
+    setShowResultsDialog(false);
+    localStorage.removeItem('testData');
+    window.location.reload();
   };
 
   if (words.length === 0) {
@@ -86,7 +127,7 @@ const Test = ({ apiUrl }) => {
     );
   }
 
-  if (testComplete) {
+  if (testComplete && !showResultsDialog) {
     return (
       <Box sx={{ textAlign: 'center' }}>
         <Typography variant="h5" gutterBottom>
@@ -163,6 +204,33 @@ const Test = ({ apiUrl }) => {
       <Typography variant="body2" align="center" sx={{ mt: 2 }}>
         Click the card to flip, or use the buttons to mark as correct/incorrect
       </Typography>
+
+      {/* Test Results Dialog */}
+      <Dialog open={showResultsDialog} onClose={handleCloseResults}>
+        <DialogTitle>Test Results</DialogTitle>
+        <DialogContent>
+          {testResults && (
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12}>
+                <Typography variant="h6" align="center" gutterBottom>
+                  {testResults.accuracy.toFixed(1)}% Accuracy
+                </Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="subtitle1">Words Tested:</Typography>
+                <Typography variant="h5">{testResults.total_words}</Typography>
+              </Grid>
+              <Grid item xs={6}>
+                <Typography variant="subtitle1">Correct Answers:</Typography>
+                <Typography variant="h5">{testResults.correct_words}</Typography>
+              </Grid>
+            </Grid>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseResults}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -10,14 +10,24 @@ import {
   Typography,
   Chip,
   Alert,
+  Divider,
 } from '@mui/material';
 
 const WordEdit = ({ word, open, onClose, onSave, apiUrl }) => {
-  const [meaning, setMeaning] = useState(word?.meaning || '');
-  const [synonyms, setSynonyms] = useState(word?.synonyms || []);
+  const [meaning, setMeaning] = useState('');
+  const [synonyms, setSynonyms] = useState([]);
   const [newSynonym, setNewSynonym] = useState('');
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // Update state when word changes
+  useEffect(() => {
+    if (word) {
+      setMeaning(word.meaning || '');
+      setSynonyms(word.synonyms ? JSON.parse(word.synonyms) : []);
+    }
+  }, [word]);
 
   const handleAddSynonym = () => {
     if (newSynonym.trim() && !synonyms.includes(newSynonym.trim())) {
@@ -61,6 +71,31 @@ const WordEdit = ({ word, open, onClose, onSave, apiUrl }) => {
     }
   };
 
+  const handleRefreshMeaning = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`${apiUrl}/api/words/${word.id}/refresh`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to refresh meaning');
+      }
+
+      const data = await response.json();
+      setMeaning(data.meaning);
+      setSynonyms(data.synonyms);
+    } catch (error) {
+      console.error('Error refreshing meaning:', error);
+      setError(error.message || 'Failed to refresh meaning. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>Edit Word: {word?.word}</DialogTitle>
@@ -72,6 +107,18 @@ const WordEdit = ({ word, open, onClose, onSave, apiUrl }) => {
         )}
         
         <Box sx={{ mt: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="subtitle1">Meaning</Typography>
+            <Button 
+              variant="outlined" 
+              size="small" 
+              onClick={handleRefreshMeaning}
+              disabled={loading}
+            >
+              {loading ? 'Refreshing...' : 'Refresh from Dictionary'}
+            </Button>
+          </Box>
+          
           <TextField
             label="Meaning"
             multiline
@@ -80,7 +127,10 @@ const WordEdit = ({ word, open, onClose, onSave, apiUrl }) => {
             onChange={(e) => setMeaning(e.target.value)}
             fullWidth
             sx={{ mb: 2 }}
+            placeholder="Enter the meaning of the word..."
           />
+
+          <Divider sx={{ my: 2 }} />
 
           <Typography variant="subtitle1" gutterBottom>
             Synonyms

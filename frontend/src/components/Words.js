@@ -150,7 +150,22 @@ const Words = ({ apiUrl }) => {
   const columns = [
     { field: 'word', headerName: 'Word', width: 150 },
     { field: 'group', headerName: 'Group', width: 150 },
-    { field: 'meaning', headerName: 'Meaning', width: 400 },
+    { 
+      field: 'meaning', 
+      headerName: 'Meaning', 
+      width: 400,
+      renderCell: (params) => (
+        <Box>
+          {params.value ? (
+            <Typography>{params.value}</Typography>
+          ) : (
+            <Typography color="error" fontStyle="italic">
+              No meaning available - click edit to add one
+            </Typography>
+          )}
+        </Box>
+      )
+    },
     {
       field: 'actions',
       headerName: 'Actions',
@@ -161,6 +176,7 @@ const Words = ({ apiUrl }) => {
             onClick={() => handleEditWord(params.row)}
             size="small"
             title="Edit"
+            color={params.row.meaning ? "primary" : "error"}
           >
             <EditIcon />
           </IconButton>

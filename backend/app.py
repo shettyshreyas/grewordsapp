@@ -5,10 +5,15 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 import pandas as pd
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from config import config
 import time
 import json
+from nltk.corpus import wordnet
+import nltk
+from sqlalchemy import func, desc
+
+nltk.download('wordnet', quiet=True)
 
 app = Flask(__name__)
 
@@ -38,54 +43,56 @@ class Word(db.Model):
     incorrect_count = db.Column(db.Integer, default=0)
     last_incorrect = db.Column(db.DateTime)
     correct_count = db.Column(db.Integer, default=0)
+    last_tested = db.Column(db.DateTime)
 
 class WordProgress(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     word_id = db.Column(db.Integer, db.ForeignKey('word.id'), nullable=False)
     is_correct = db.Column(db.Boolean, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    test_session_id = db.Column(db.Integer, db.ForeignKey('test_session.id', name='fk_word_progress_test_session'), nullable=True)
+
+class TestSession(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    start_time = db.Column(db.DateTime, default=datetime.utcnow)
+    end_time = db.Column(db.DateTime)
+    total_words = db.Column(db.Integer, default=0)
+    correct_words = db.Column(db.Integer, default=0)
+    groups = db.Column(db.Text)  # Store groups as JSON string
+    progress_records = db.relationship('WordProgress', backref='test_session', lazy=True)
 
 with app.app_context():
     db.create_all()
 
-def get_word_meaning(word, max_retry_time=60):  # 1 minute max retry time
-    url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
-    start_time = time.time()
-    backoff = 1  # Start with 1 second backoff
+
+def get_word_meaning(word, max_retry_time=60):
+    """
+    Get the first available meaning and a list of synonyms for a word using WordNet.
+    The return format matches the previous API-based implementation:
     
-    while True:
-        try:
-            response = requests.get(url)
-            if response.status_code == 404:
-                print(f"Word '{word}' not found in dictionary")
-                return None
-            response.raise_for_status()
-            data = response.json()
-            
-            # Extract meaning and synonyms
-            meaning = data[0]['meanings'][0]['definitions'][0]['definition']
-            
-            # Extract synonyms from all definitions
-            synonyms = set()
-            for meaning_data in data[0]['meanings']:
-                for definition in meaning_data['definitions']:
-                    if 'synonyms' in definition:
-                        synonyms.update(definition['synonyms'])
-            
-            return {
-                'meaning': meaning,
-                'synonyms': list(synonyms)
-            }
-            
-        except requests.exceptions.RequestException as e:
-            elapsed_time = time.time() - start_time
-            if elapsed_time >= max_retry_time:
-                print(f"Failed to fetch meaning for {word} after {max_retry_time} seconds")
-                return None
-                
-            print(f"Attempt failed for {word}: {e}. Retrying in {backoff} seconds...")
-            time.sleep(backoff)
-            backoff = min(backoff * 2, 30)  # Cap backoff at 30 seconds
+    {
+        'meaning': str,
+        'synonyms': list of str
+    }
+    """
+    synsets = wordnet.synsets(word)
+    if not synsets:
+        print(f"Word '{word}' not found in WordNet.")
+        return None
+
+    # Get the first definition
+    meaning = synsets[0].definition()
+
+    # Collect synonyms from all synsets
+    synonyms = set()
+    for syn in synsets:
+        for lemma in syn.lemmas():
+            synonyms.add(lemma.name())
+
+    return {
+        'meaning': meaning,
+        'synonyms': list(synonyms)
+    }
 
 @app.route('/api/groups', methods=['GET'])
 def get_groups():
@@ -121,6 +128,14 @@ def create_test():
     groups = data.get('groups', [])
     word_count = data.get('word_count', 10)
     
+    # Create a new test session
+    test_session = TestSession(
+        groups=json.dumps(groups),
+        total_words=word_count
+    )
+    db.session.add(test_session)
+    db.session.commit()
+    
     # Query words with priority for incorrect ones
     query = Word.query.filter(Word.group.in_(groups))
     words = query.order_by(
@@ -128,10 +143,17 @@ def create_test():
         Word.last_incorrect.desc()
     ).limit(word_count).all()
     
+    # Update last_tested for all words in the test
+    for word in words:
+        word.last_tested = datetime.utcnow()
+    
+    db.session.commit()
+    
     test_words = [{
         'id': word.id,
         'word': word.word,
-        'meaning': word.meaning
+        'meaning': word.meaning,
+        'test_session_id': test_session.id
     } for word in words]
     
     return jsonify(test_words)
@@ -141,8 +163,17 @@ def submit_answer():
     data = request.json
     word_id = data.get('word_id')
     is_correct = data.get('correct', False)
+    test_session_id = data.get('test_session_id')
     
     word = Word.query.get_or_404(word_id)
+    
+    # Create progress record
+    progress = WordProgress(
+        word_id=word_id,
+        is_correct=is_correct,
+        test_session_id=test_session_id
+    )
+    db.session.add(progress)
     
     if is_correct:
         word.correct_count += 1
@@ -156,6 +187,30 @@ def submit_answer():
     
     db.session.commit()
     return jsonify({'message': 'Answer recorded successfully'})
+
+@app.route('/api/test-complete', methods=['POST'])
+def test_complete():
+    data = request.json
+    test_session_id = data.get('test_session_id')
+    
+    test_session = TestSession.query.get_or_404(test_session_id)
+    test_session.end_time = datetime.utcnow()
+    
+    # Count correct answers
+    correct_count = WordProgress.query.filter_by(
+        test_session_id=test_session_id,
+        is_correct=True
+    ).count()
+    
+    test_session.correct_words = correct_count
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Test completed successfully',
+        'total_words': test_session.total_words,
+        'correct_words': test_session.correct_words,
+        'accuracy': (test_session.correct_words / test_session.total_words * 100) if test_session.total_words > 0 else 0
+    })
 
 @app.route('/api/progress', methods=['POST'])
 def update_progress():
@@ -220,7 +275,15 @@ def refresh_word_meaning(word_id):
             'meaning': result['meaning'],
             'synonyms': result['synonyms']
         })
-    return jsonify({'error': 'Could not fetch meaning'}), 400
+    else:
+        # Keep the existing meaning if available, otherwise return an error
+        if word.meaning:
+            return jsonify({
+                'message': 'Word not found in dictionary. Keeping existing meaning.',
+                'meaning': word.meaning,
+                'synonyms': json.loads(word.synonyms) if word.synonyms else []
+            })
+        return jsonify({'error': 'Word not found in dictionary and no existing meaning available'}), 400
 
 @app.route('/api/words/<int:word_id>', methods=['DELETE'])
 def delete_word(word_id):
@@ -243,13 +306,15 @@ def refresh_all_words():
                 word.synonyms = json.dumps(result['synonyms'])
                 updated_count += 1
             else:
-                failed_words.append(word.word)
+                # Only add to failed_words if the word doesn't have a meaning yet
+                if not word.meaning:
+                    failed_words.append(word.word)
 
         db.session.commit()
         
         if failed_words:
             return jsonify({
-                'message': f'Refreshed {updated_count} words successfully. Failed to refresh {len(failed_words)} words.',
+                'message': f'Refreshed {updated_count} words successfully. {len(failed_words)} words not found in dictionary.',
                 'failed_words': failed_words
             })
         else:
@@ -322,16 +387,16 @@ def upload_file():
                 updated_count += 1
             else:
                 result = get_word_meaning(word_text)
-                if result:
-                    new_word = Word(
-                        word=word_text,
-                        group=group,
-                        meaning=result['meaning'],
-                        synonyms=json.dumps(result['synonyms'])
-                    )
-                    current_batch.append(new_word)
-                    processed_count += 1
-                else:
+                new_word = Word(
+                    word=word_text,
+                    group=group,
+                    meaning=result['meaning'] if result else None,
+                    synonyms=json.dumps(result['synonyms']) if result else json.dumps([])
+                )
+                current_batch.append(new_word)
+                processed_count += 1
+                
+                if not result:
                     failed_words.append(word_text)
             
             # Commit batch if it reaches the batch size
@@ -397,6 +462,99 @@ def update_word(word_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/history', methods=['GET'])
+def get_history():
+    # Get all test sessions
+    test_sessions = TestSession.query.filter(TestSession.end_time.isnot(None)).order_by(TestSession.end_time.desc()).all()
+    
+    if not test_sessions:
+        return jsonify({
+            'total_tests': 0,
+            'average_accuracy': 0,
+            'words_mastered': 0,
+            'recent_activity': [],
+            'accuracy_trend': [],
+            'words_per_day': []
+        })
+    
+    # Calculate total tests and average accuracy
+    total_tests = len(test_sessions)
+    total_accuracy = sum((session.correct_words / session.total_words * 100) for session in test_sessions if session.total_words > 0)
+    average_accuracy = total_accuracy / total_tests if total_tests > 0 else 0
+    
+    # Count words mastered (correct 3 times in a row)
+    words_mastered = Word.query.filter(Word.correct_count >= 3).count()
+    
+    # Get recent activity (last 10 tests)
+    recent_activity = []
+    for session in test_sessions[:10]:
+        recent_activity.append({
+            'date': session.end_time.isoformat(),
+            'words_tested': session.total_words,
+            'correct': session.correct_words,
+            'accuracy': (session.correct_words / session.total_words * 100) if session.total_words > 0 else 0
+        })
+    
+    # Get accuracy trend (last 30 days)
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    recent_sessions = TestSession.query.filter(
+        TestSession.end_time >= thirty_days_ago
+    ).order_by(TestSession.end_time).all()
+    
+    # Group by date
+    accuracy_by_date = {}
+    words_by_date = {}
+    
+    for session in recent_sessions:
+        date_str = session.end_time.strftime('%Y-%m-%d')
+        accuracy = (session.correct_words / session.total_words * 100) if session.total_words > 0 else 0
+        
+        if date_str in accuracy_by_date:
+            # Average the accuracy for the day
+            accuracy_by_date[date_str] = (accuracy_by_date[date_str] + accuracy) / 2
+            words_by_date[date_str] += session.total_words
+        else:
+            accuracy_by_date[date_str] = accuracy
+            words_by_date[date_str] = session.total_words
+    
+    # Convert to lists for the chart
+    accuracy_trend = [{'date': date, 'accuracy': acc} for date, acc in accuracy_by_date.items()]
+    words_per_day = [{'date': date, 'words': words} for date, words in words_by_date.items()]
+    
+    return jsonify({
+        'total_tests': total_tests,
+        'average_accuracy': average_accuracy,
+        'words_mastered': words_mastered,
+        'recent_activity': recent_activity,
+        'accuracy_trend': accuracy_trend,
+        'words_per_day': words_per_day
+    })
+
+@app.route('/api/problematic-words', methods=['GET'])
+def get_problematic_words():
+    # Get words that have been answered incorrectly multiple times
+    problematic_words = Word.query.filter(Word.incorrect_count > 0).order_by(
+        Word.incorrect_count.desc(),
+        Word.last_tested.desc()
+    ).limit(20).all()
+    
+    result = []
+    for word in problematic_words:
+        # Calculate accuracy for this word
+        total_attempts = word.correct_count + word.incorrect_count
+        accuracy = (word.correct_count / total_attempts * 100) if total_attempts > 0 else 0
+        
+        result.append({
+            'id': word.id,
+            'word': word.word,
+            'group': word.group,
+            'incorrect_count': word.incorrect_count,
+            'last_tested': word.last_tested.isoformat() if word.last_tested else None,
+            'accuracy': accuracy
+        })
+    
+    return jsonify(result)
 
 if __name__ == '__main__':
     app.run(debug=True) 

@@ -16,6 +16,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  CircularProgress,
 } from '@mui/material';
 
 const Home = ({ onStartTest, apiUrl }) => {
@@ -24,11 +25,13 @@ const Home = ({ onStartTest, apiUrl }) => {
   const [wordCount, setWordCount] = useState(10);
   const [stats, setStats] = useState({
     total_words: 0,
-    words_tested: 0,
-    correct_answers: 0,
-    accuracy: 0
+    words_to_review: 0,
+    groups: 0,
+    words_mastered: 0,
+    average_accuracy: 0
   });
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchGroups();
@@ -47,13 +50,27 @@ const Home = ({ onStartTest, apiUrl }) => {
   };
 
   const fetchStats = async () => {
+    setLoading(true);
     try {
-      const response = await fetch(`${apiUrl}/api/stats`);
-      if (!response.ok) throw new Error('Failed to fetch stats');
-      const data = await response.json();
-      setStats(data);
+      // Fetch basic stats
+      const statsResponse = await fetch(`${apiUrl}/api/stats`);
+      if (!statsResponse.ok) throw new Error('Failed to fetch stats');
+      const statsData = await statsResponse.json();
+      
+      // Fetch history data for additional stats
+      const historyResponse = await fetch(`${apiUrl}/api/history`);
+      if (!historyResponse.ok) throw new Error('Failed to fetch history data');
+      const historyData = await historyResponse.json();
+      
+      setStats({
+        ...statsData,
+        words_mastered: historyData.words_mastered || 0,
+        average_accuracy: historyData.average_accuracy || 0
+      });
     } catch (error) {
       console.error('Error fetching stats:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -139,24 +156,31 @@ const Home = ({ onStartTest, apiUrl }) => {
                   Reset Stats
                 </Button>
               </Box>
-              <Grid container spacing={2}>
-                <Grid item xs={6} md={3}>
-                  <Typography variant="subtitle2">Total Words</Typography>
-                  <Typography variant="h6">{stats.total_words}</Typography>
+              
+              {loading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                  <CircularProgress />
+                </Box>
+              ) : (
+                <Grid container spacing={2}>
+                  <Grid item xs={6}>
+                    <Typography variant="subtitle2">Total Words</Typography>
+                    <Typography variant="h6">{stats.total_words}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="subtitle2">Words to Review</Typography>
+                    <Typography variant="h6" color="error">{stats.words_to_review}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="subtitle2">Words Mastered</Typography>
+                    <Typography variant="h6" color="success.main">{stats.words_mastered}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="subtitle2">Average Accuracy</Typography>
+                    <Typography variant="h6">{stats.average_accuracy.toFixed(1)}%</Typography>
+                  </Grid>
                 </Grid>
-                <Grid item xs={6} md={3}>
-                  <Typography variant="subtitle2">Words Tested</Typography>
-                  <Typography variant="h6">{stats.words_tested}</Typography>
-                </Grid>
-                <Grid item xs={6} md={3}>
-                  <Typography variant="subtitle2">Correct Answers</Typography>
-                  <Typography variant="h6">{stats.correct_answers}</Typography>
-                </Grid>
-                <Grid item xs={6} md={3}>
-                  <Typography variant="subtitle2">Accuracy</Typography>
-                  <Typography variant="h6">{stats.accuracy}%</Typography>
-                </Grid>
-              </Grid>
+              )}
             </Paper>
           </Paper>
         </Grid>

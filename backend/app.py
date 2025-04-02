@@ -70,7 +70,7 @@ logger.info("Database and migration extensions initialized")
 def health_check():
     try:
         # Check database connection
-        db.session.execute('SELECT 1')
+        db.session.execute(text('SELECT 1'))
         db_status = "healthy"
         logger.info("Database health check passed")
     except Exception as e:

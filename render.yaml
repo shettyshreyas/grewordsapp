@@ -11,8 +11,6 @@ services:
         value: production
       - key: FLASK_APP
         value: app.py
-      - key: PORT
-        value: 5000  # Optional fallback for local dev
       - fromDatabase:
           name: grewords-db
           property: connectionString

@@ -6,7 +6,6 @@ import Container from '@mui/material/Container';
 import Navigation from './components/Navigation';
 import Home from './components/Home';
 import Test from './components/Test';
-import Stats from './components/Stats';
 import Upload from './components/Upload';
 import Words from './components/Words';
 import History from './components/History';

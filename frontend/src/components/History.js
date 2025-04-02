@@ -16,7 +16,6 @@ import {
   Alert,
   Tabs,
   Tab,
-  Divider,
 } from '@mui/material';
 import {
   LineChart,
@@ -40,7 +39,7 @@ const History = ({ apiUrl }) => {
 
   useEffect(() => {
     fetchHistoryData();
-  }, [apiUrl]);
+  }, [apiUrl, fetchHistoryData]);
 
   const fetchHistoryData = async () => {
     setLoading(true);

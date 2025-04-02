@@ -33,7 +33,7 @@ const Test = ({ apiUrl }) => {
     if (testData) {
       fetchTestWords(testData.selectedGroups, testData.wordCount);
     }
-  }, [apiUrl]);
+  }, [apiUrl, fetchTestWords]);
 
   const fetchTestWords = async (groups, wordCount) => {
     try {

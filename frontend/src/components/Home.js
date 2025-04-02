@@ -36,7 +36,7 @@ const Home = ({ onStartTest, apiUrl }) => {
   useEffect(() => {
     fetchGroups();
     fetchStats();
-  }, [apiUrl]);
+  }, [apiUrl, fetchGroups, fetchStats]);
 
   const fetchGroups = async () => {
     try {

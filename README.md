@@ -1,189 +1,123 @@
 # GRE Words App
 
-A web application to help users learn and practice GRE vocabulary words.
-
-## Local Development
-
-### Prerequisites
-
-- Python 3.9 or higher
-- Node.js 18 or higher
-- PostgreSQL (for local database)
-
-### Database Setup
-
-#### macOS
-
-1. Install PostgreSQL using Homebrew:
-   ```bash
-   brew install postgresql@14
-   ```
-
-2. Start the PostgreSQL service:
-   ```bash
-   brew services start postgresql@14
-   ```
-
-3. Create the database:
-   ```bash
-   createdb grewords
-   ```
-
-#### Linux
-
-1. Install PostgreSQL:
-   ```bash
-   sudo apt-get update
-   sudo apt-get install postgresql postgresql-contrib
-   ```
-
-2. Start the PostgreSQL service:
-   ```bash
-   sudo service postgresql start
-   ```
-
-3. Create the database:
-   ```bash
-   sudo -u postgres createdb grewords
-   ```
-
-#### Windows
-
-1. Download and install PostgreSQL from the [official website](https://www.postgresql.org/download/windows/)
-2. During installation, note down the password you set for the postgres user
-3. Open pgAdmin 4 (installed with PostgreSQL)
-4. Right-click on "Databases" and select "Create" > "Database"
-5. Enter "grewords" as the database name and click "Save"
-
-### Backend Setup
-
-1. Create and activate a virtual environment:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. Set up environment variables:
-   ```bash
-   cp .env.example .env
-   ```
-   Edit `.env` with your local database credentials and other settings.
-
-4. Initialize the database:
-   ```bash
-   python init_db.py
-   ```
-
-5. Run the Flask development server:
-   ```bash
-   python app.py
-   ```
-   The backend will be available at `http://localhost:5000`
-
-### Frontend Setup
-
-1. Navigate to the frontend directory:
-   ```bash
-   cd frontend
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Create a `.env` file:
-   ```bash
-   echo "REACT_APP_API_URL=http://localhost:5000" > .env
-   ```
-
-4. Start the development server:
-   ```bash
-   npm start
-   ```
-   The frontend will be available at `http://localhost:3000`
-
-### Testing
-
-#### Backend Tests
-
-Run tests from the root directory:
-```bash
-python -m pytest
-```
-
-#### Frontend Tests
-
-1. Navigate to the frontend directory:
-   ```bash
-   cd frontend
-   ```
-
-2. Run tests:
-   ```bash
-   npm test
-   ```
-
-### Database Management
-
-To manage the database locally:
-
-1. Create a new database:
-   ```bash
-   createdb grewords
-   ```
-
-2. Run migrations:
-   ```bash
-   python init_db.py
-   ```
-
-3. To reset the database:
-   ```bash
-   dropdb grewords
-   createdb grewords
-   python init_db.py
-   ```
+A web application for managing and learning GRE vocabulary words.
 
 ## Project Structure
 
 ```
 grewordsapp/
-├── frontend/          # React frontend
-│   ├── src/          # Source code
-│   ├── public/       # Static files
-│   └── package.json  # Frontend dependencies
-├── .env.example      # Example environment variables
-├── requirements.txt  # Python dependencies
-├── app.py           # Flask application
-├── config.py        # Flask configuration
-├── init_db.py       # Database initialization
-├── populate_db.py   # Database population script
-└── .github/         # GitHub Actions workflows
+├── backend/               # Backend Flask application
+│   ├── app.py            # Main application file
+│   ├── config.py         # Configuration settings
+│   └── requirements.txt  # Python dependencies
+├── frontend/             # Frontend React application
+│   ├── public/           # Static files
+│   └── src/              # React source code
+└── README.md            # This file
 ```
 
-## Deployment
+## Setup Instructions
 
-The application is automatically deployed using GitHub Actions:
+### Backend Setup
 
-- Production: Deploys to GitHub Pages (frontend) and Render (backend) on pushes to main
-- Preview: Deploys preview builds for pull requests
+1. Create and activate a virtual environment:
+```bash
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+# On Windows:
+venv\Scripts\activate
+# On macOS/Linux:
+source venv/bin/activate
+```
+
+2. Install dependencies:
+```bash
+cd backend
+pip install -r requirements.txt
+```
+
+3. Set up the database:
+
+#### Development (SQLite)
+- No additional setup required. The application will automatically create a SQLite database file (`grewords.db`) in the backend directory.
+- This database file is ignored by git (see `.gitignore`).
+
+#### Production (PostgreSQL)
+1. Install PostgreSQL
+2. Create a database:
+```bash
+createdb grewords
+```
+3. Set environment variables:
+```bash
+export DATABASE_URL="postgresql://username:password@localhost:5432/grewords"
+export FLASK_ENV=production
+```
+
+4. Run the backend:
+```bash
+# Development
+flask --app backend/app.py run
+
+# Production
+flask --app backend/app.py run --host=0.0.0.0
+```
+
+### Frontend Setup
+
+1. Install dependencies:
+```bash
+cd frontend
+npm install
+```
+
+2. Start the development server:
+```bash
+npm start
+```
+
+The frontend will run on `http://localhost:3000` and communicate with the backend at `http://localhost:5000`.
+
+## Features
+
+- Upload Excel files containing GRE words and their groups
+- View and manage words in a tabular format
+- Flashcards for learning words
+- Track correct and incorrect answers
+- Automatic fetching of word meanings and synonyms
+- Group-based organization of words
+
+## API Endpoints
+
+- `POST /api/upload`: Upload Excel file with words
+- `GET /api/words`: Get all words (with optional search and group filters)
+- `POST /api/words/<id>/refresh`: Refresh meaning for a specific word
+- `POST /api/words/refresh-all`: Refresh meanings for all words
+- `DELETE /api/words/<id>`: Delete a specific word
+- `DELETE /api/words/delete-all`: Delete all words
+
+## Development Notes
+
+- The application uses SQLite in development mode for simplicity
+- CORS is enabled for local development
+- Word meanings are fetched from the Free Dictionary API
+- The frontend uses Material-UI for styling
+
+## Production Deployment
+
+For production deployment:
+1. Set up a PostgreSQL database
+2. Configure environment variables
+3. Use a production-grade WSGI server (e.g., Gunicorn)
+4. Set up proper CORS configuration
+5. Use environment variables for sensitive information
 
 ## Contributing
 
-1. Create a new branch for your feature
-2. Make your changes
-3. Run tests locally
-4. Create a pull request
-5. Wait for the preview deployment
-6. Get code review
-7. Merge to main
-
-## License
-
-MIT 
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request 

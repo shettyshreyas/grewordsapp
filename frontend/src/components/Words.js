@@ -17,6 +17,8 @@ import {
 import { DataGrid } from '@mui/x-data-grid';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
+import WordEdit from './WordEdit';
 
 const Words = ({ apiUrl }) => {
   const [words, setWords] = useState([]);
@@ -26,6 +28,7 @@ const Words = ({ apiUrl }) => {
   const [selectedGroup, setSelectedGroup] = useState('');
   const [groups, setGroups] = useState([]);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [editingWord, setEditingWord] = useState(null);
 
   useEffect(() => {
     fetchGroups();
@@ -107,6 +110,15 @@ const Words = ({ apiUrl }) => {
     }
   };
 
+  const handleEditWord = (word) => {
+    setEditingWord(word);
+  };
+
+  const handleSaveWord = (updatedWord) => {
+    setWords(words.map(w => w.id === updatedWord.id ? updatedWord : w));
+    showSnackbar('Word updated successfully');
+  };
+
   const handleRefreshAll = async () => {
     if (!window.confirm('Are you sure you want to refresh all word meanings? This may take a while.')) return;
     
@@ -136,54 +148,33 @@ const Words = ({ apiUrl }) => {
   }, [searchTerm, selectedGroup]);
 
   const columns = [
-    { field: 'word', headerName: 'Word', width: 200 },
-    { 
-        field: 'meaning', 
-        headerName: 'Meaning', 
-        width: 400,
-        renderCell: (params) => (
-            <Box>
-                <Typography>{params.value}</Typography>
-                {params.row.synonyms && (
-                    <Typography variant="body2" color="textSecondary">
-                        Synonyms: {JSON.parse(params.row.synonyms).join(', ')}
-                    </Typography>
-                )}
-            </Box>
-        )
-    },
+    { field: 'word', headerName: 'Word', width: 150 },
     { field: 'group', headerName: 'Group', width: 150 },
-    { 
-      field: 'correct_count', 
-      headerName: 'Correct', 
-      width: 100,
-      valueGetter: (params) => params.value || 0
-    },
-    { 
-      field: 'incorrect_count', 
-      headerName: 'Incorrect', 
-      width: 100,
-      valueGetter: (params) => params.value || 0
-    },
+    { field: 'meaning', headerName: 'Meaning', width: 400 },
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 120,
-      sortable: false,
+      width: 200,
       renderCell: (params) => (
         <Box>
           <IconButton
+            onClick={() => handleEditWord(params.row)}
             size="small"
+            title="Edit"
+          >
+            <EditIcon />
+          </IconButton>
+          <IconButton
             onClick={() => handleRefreshWord(params.row.id)}
-            title="Refresh meaning"
+            size="small"
+            title="Refresh Meaning"
           >
             <RefreshIcon />
           </IconButton>
           <IconButton
-            size="small"
             onClick={() => handleDeleteWord(params.row.id)}
-            title="Delete word"
-            color="error"
+            size="small"
+            title="Delete"
           >
             <DeleteIcon />
           </IconButton>
@@ -192,40 +183,11 @@ const Words = ({ apiUrl }) => {
     },
   ];
 
-
-  const handleDeleteAllWords = async () => {
-    if (!window.confirm('Are you sure you want to delete all words? This action cannot be undone.')) return;
-
-    try {
-        const response = await fetch(`${apiUrl}/api/words/delete-all`, {
-            method: 'DELETE',
-        });
-        if (!response.ok) throw new Error('Failed to delete all words');
-        showSnackbar('All words deleted successfully');
-        fetchWords(); // Refresh the word list
-    } catch (error) {
-        console.error('Error deleting all words:', error);
-        showSnackbar('Failed to delete all words', 'error');
-    }
-};
-
   return (
     <Box>
       <Paper sx={{ p: 3, mb: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6">Words List</Typography>
-                    <Button
-                        variant="contained"
-                        color="error"
-                        onClick={handleDeleteAllWords}
-                    >
-                        Delete All Words
-                    </Button>
-        </Box>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6">
-            Words List
-          </Typography>
+          <Typography variant="h6">Words List</Typography>
           <Button
             variant="contained"
             startIcon={<RefreshIcon />}
@@ -235,26 +197,20 @@ const Words = ({ apiUrl }) => {
             Refresh All Meanings
           </Button>
         </Box>
-        
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        )}
 
         <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
           <TextField
-            label="Search"
+            label="Search Words"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            sx={{ flex: 1 }}
+            fullWidth
           />
           <FormControl sx={{ minWidth: 200 }}>
             <InputLabel>Group</InputLabel>
             <Select
               value={selectedGroup}
-              label="Group"
               onChange={(e) => setSelectedGroup(e.target.value)}
+              label="Group"
             >
               <MenuItem value="">All Groups</MenuItem>
               {groups.map((group) => (
@@ -266,31 +222,21 @@ const Words = ({ apiUrl }) => {
           </FormControl>
         </Box>
 
-        <Box sx={{ height: 600, width: '100%' }}>
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-              <CircularProgress />
-            </Box>
-          ) : words.length === 0 ? (
-            <Typography variant="body1" align="center" sx={{ mt: 4 }}>
-              No words found. Try adjusting your search or filters.
-            </Typography>
-          ) : (
-            <DataGrid
-              rows={words}
-              columns={columns}
-              pageSize={10}
-              rowsPerPageOptions={[10]}
-              disableSelectionOnClick
-              autoHeight
-              getRowId={(row) => row.id}
-              initialState={{
-                pagination: {
-                  paginationModel: { pageSize: 10 },
-                },
-              }}
-            />
-          )}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+
+        <Box sx={{ height: 400, width: '100%' }}>
+          <DataGrid
+            rows={words}
+            columns={columns}
+            pageSize={5}
+            rowsPerPageOptions={[5]}
+            disableSelectionOnClick
+            loading={loading}
+          />
         </Box>
       </Paper>
 
@@ -300,6 +246,16 @@ const Words = ({ apiUrl }) => {
         onClose={handleCloseSnackbar}
         message={snackbar.message}
       />
+
+      {editingWord && (
+        <WordEdit
+          word={editingWord}
+          open={true}
+          onClose={() => setEditingWord(null)}
+          onSave={handleSaveWord}
+          apiUrl={apiUrl}
+        />
+      )}
     </Box>
   );
 };

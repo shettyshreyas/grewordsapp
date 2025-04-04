@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Paper,
@@ -27,11 +27,8 @@ const FlaggedWords = ({ apiUrl }) => {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editedMeaning, setEditedMeaning] = useState('');
 
-  useEffect(() => {
-    fetchFlaggedWords();
-  }, [apiUrl]);
-
-  const fetchFlaggedWords = async () => {
+  // ✅ Wrap fetchFlaggedWords in useCallback to stabilize reference
+  const fetchFlaggedWords = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(`${apiUrl}/api/flagged-words`);
@@ -45,7 +42,11 @@ const FlaggedWords = ({ apiUrl }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiUrl]);
+
+  useEffect(() => {
+    fetchFlaggedWords();
+  }, [fetchFlaggedWords]); // ✅ No more ESLint errors
 
   const handleEditClick = (word) => {
     setSelectedWord(word);
@@ -78,7 +79,7 @@ const FlaggedWords = ({ apiUrl }) => {
       });
 
       setEditDialogOpen(false);
-      fetchFlaggedWords(); // Refresh the list
+      fetchFlaggedWords(); // ✅ Safe to call here
     } catch (err) {
       setError(err.message);
     }
@@ -177,4 +178,4 @@ const FlaggedWords = ({ apiUrl }) => {
   );
 };
 
-export default FlaggedWords; 
+export default FlaggedWords;

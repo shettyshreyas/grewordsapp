@@ -32,7 +32,6 @@ function App() {
     localStorage.getItem('selectedBackend') || config.defaultBackend
   );
   const [apiUrl, setApiUrl] = useState(config.backends[selectedBackend]);
-  const [flaggedWords, setFlaggedWords] = useState([]);
 
   useEffect(() => {
     localStorage.setItem('selectedBackend', selectedBackend);

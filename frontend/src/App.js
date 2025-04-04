@@ -9,8 +9,9 @@ import Test from './components/Test';
 import Upload from './components/Upload';
 import Words from './components/Words';
 import History from './components/History';
+import FlaggedWords from './components/FlaggedWords';
+import Settings from './components/Settings';
 import { Tab, Tabs, Typography } from '@mui/material';
-import BackendSelector from './components/BackendSelector';
 import config from './config';
 
 const theme = createTheme({
@@ -31,6 +32,7 @@ function App() {
     localStorage.getItem('selectedBackend') || config.defaultBackend
   );
   const [apiUrl, setApiUrl] = useState(config.backends[selectedBackend]);
+  const [flaggedWords, setFlaggedWords] = useState([]);
 
   useEffect(() => {
     localStorage.setItem('selectedBackend', selectedBackend);
@@ -60,29 +62,38 @@ function App() {
             GRE Words App
           </Typography>
           
-          <BackendSelector
-            selectedBackend={selectedBackend}
-            onBackendChange={handleBackendChange}
-          />
-
-          <Tabs
-            value={currentTab}
-            onChange={handleTabChange}
-            centered
-            sx={{ mb: 4 }}
-          >
-            <Tab label="Home" />
-            <Tab label="Test" />
-            <Tab label="Upload" />
-            <Tab label="Words" />
-            <Tab label="History" />
-          </Tabs>
+          <Box sx={{ width: '100%', bgcolor: 'background.paper' }}>
+            <Tabs
+              value={currentTab}
+              onChange={handleTabChange}
+              variant="scrollable"
+              scrollButtons="auto"
+              allowScrollButtonsMobile
+              aria-label="scrollable auto tabs"
+              sx={{ mb: 4 }}
+            >
+              <Tab label="Home" />
+              <Tab label="Test" />
+              <Tab label="Upload" />
+              <Tab label="Words" />
+              <Tab label="History" />
+              <Tab label="Flagged Words" />
+              <Tab label="Settings" />
+            </Tabs>
+          </Box>
 
           {currentTab === 0 && <Home onStartTest={handleStartTest} apiUrl={apiUrl} />}
           {currentTab === 1 && <Test apiUrl={apiUrl} />}
           {currentTab === 2 && <Upload apiUrl={apiUrl} />}
           {currentTab === 3 && <Words apiUrl={apiUrl} />}
           {currentTab === 4 && <History apiUrl={apiUrl} />}
+          {currentTab === 5 && <FlaggedWords apiUrl={apiUrl} />}
+          {currentTab === 6 && (
+            <Settings
+              selectedBackend={selectedBackend}
+              onBackendChange={handleBackendChange}
+            />
+          )}
         </Container>
       </Box>
     </ThemeProvider>

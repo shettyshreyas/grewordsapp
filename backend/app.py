@@ -112,6 +112,14 @@ class TestSession(db.Model):
     groups = db.Column(db.Text)  # Store groups as JSON string
     progress_records = db.relationship('WordProgress', backref='test_session', lazy=True)
 
+class FlaggedWord(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    word_id = db.Column(db.Integer, db.ForeignKey('word.id'), nullable=False)
+    flagged_at = db.Column(db.DateTime, default=datetime.utcnow)
+    resolved = db.Column(db.Boolean, default=False)
+    resolution_note = db.Column(db.Text)
+    word = db.relationship('Word', backref='flags')
+
 with app.app_context():
     db.create_all()
 
@@ -147,7 +155,7 @@ def get_word_meaning(word, max_retry_time=60):
 
 @app.route('/api/groups', methods=['GET'])
 def get_groups():
-    groups = db.session.query(Word.group).distinct().all()
+    groups = db.session.query(Word.group).distinct().order_by(Word.group).all()
     return jsonify([group[0] for group in groups])
 
 @app.route('/api/words', methods=['GET'])
@@ -673,6 +681,60 @@ def get_problematic_words():
         })
     
     return jsonify(result)
+
+@app.route('/api/flag-words', methods=['POST'])
+@log_db_commit
+def flag_words():
+    try:
+        data = request.json
+        word_ids = data.get('word_ids', [])
+        
+        logger.info(f"Flagging words: {word_ids}")
+        
+        for word_id in word_ids:
+            # Check if word is already flagged and unresolved
+            existing_flag = FlaggedWord.query.filter_by(
+                word_id=word_id,
+                resolved=False
+            ).first()
+            
+            if not existing_flag:
+                flag = FlaggedWord(word_id=word_id)
+                db.session.add(flag)
+        
+        return jsonify({'message': 'Words flagged successfully'})
+    except Exception as e:
+        logger.error(f"Error flagging words: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/flagged-words', methods=['GET'])
+def get_flagged_words():
+    try:
+        flagged = FlaggedWord.query.filter_by(resolved=False).all()
+        return jsonify([{
+            'id': flag.id,
+            'word': flag.word.word,
+            'meaning': flag.word.meaning,
+            'group': flag.word.group,
+            'flagged_at': flag.flagged_at.isoformat(),
+        } for flag in flagged])
+    except Exception as e:
+        logger.error(f"Error getting flagged words: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/flagged-words/<int:flag_id>/resolve', methods=['POST'])
+@log_db_commit
+def resolve_flag(flag_id):
+    try:
+        flag = FlaggedWord.query.get_or_404(flag_id)
+        flag.resolved = True
+        flag.resolution_note = request.json.get('note', 'Meaning updated')
+        
+        logger.info(f"Resolved flag for word: {flag.word.word}")
+        return jsonify({'message': 'Flag resolved successfully'})
+    except Exception as e:
+        logger.error(f"Error resolving flag: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     try:

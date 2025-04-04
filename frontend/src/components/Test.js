@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
+import FlagIcon from '@mui/icons-material/Flag';
 import config from '../config';
 
 const Test = () => {
@@ -25,6 +26,8 @@ const Test = () => {
   const [testComplete, setTestComplete] = useState(false);
   const [testResults, setTestResults] = useState(null);
   const [showResultsDialog, setShowResultsDialog] = useState(false);
+  const [answers, setAnswers] = useState({});
+  const [flaggedWords, setFlaggedWords] = useState({});
   const { apiUrl } = config;
 
   const currentWord = words[currentIndex];
@@ -45,7 +48,8 @@ const Test = () => {
         }
 
         const data = await response.json();
-        setWords(data);
+        const shuffledWords = [...data].sort(() => Math.random() - 0.5);
+        setWords(shuffledWords);
       } catch (err) {
         console.error('Failed to fetch test words:', err);
       }
@@ -63,42 +67,87 @@ const Test = () => {
 
   const handleAnswer = async (isCorrect) => {
     const currentWord = words[currentIndex];
+    
+    setAnswers(prev => ({
+      ...prev,
+      [currentWord.id]: isCorrect
+    }));
 
-    try {
-      await fetch(`${apiUrl}/api/answer`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          word_id: currentWord.id,
-          correct: isCorrect,
-          test_session_id: currentWord.test_session_id
-        }),
-      });
-
-      if (currentIndex < words.length - 1) {
-        const newIndex = currentIndex + 1;
-        setCurrentIndex(newIndex);
-        setShowMeaning(false);
-        setProgress(((newIndex) / words.length) * 100);
-      } else {
-        await completeTest(currentWord.test_session_id);
-      }
-    } catch (error) {
-      console.error('Error submitting answer:', error);
+    if (currentIndex < words.length - 1) {
+      const newIndex = currentIndex + 1;
+      setCurrentIndex(newIndex);
+      setShowMeaning(false);
+      setProgress(((newIndex) / words.length) * 100);
+    } else {
+      await completeTest();
     }
   };
 
-  const completeTest = async (testSessionId) => {
+  const handlePrevious = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(currentIndex - 1);
+      setShowMeaning(false);
+    }
+  };
+
+  const handleNext = () => {
+    if (currentIndex < words.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+      setShowMeaning(false);
+    }
+  };
+
+  const handleFlagWord = () => {
+    const currentWord = words[currentIndex];
+    setFlaggedWords(prev => ({
+      ...prev,
+      [currentWord.id]: !prev[currentWord.id]
+    }));
+  };
+
+  const completeTest = async () => {
     try {
+      const answerPromises = words.map(word => 
+        fetch(`${apiUrl}/api/answer`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            word_id: word.id,
+            correct: answers[word.id] || false,
+            test_session_id: word.test_session_id
+          }),
+        })
+      );
+      
+      await Promise.all(answerPromises);
+
+      if (Object.keys(flaggedWords).length > 0) {
+        const flaggedWordIds = Object.entries(flaggedWords)
+          .filter(([_, flagged]) => flagged)
+          .map(([id]) => parseInt(id));
+
+        if (flaggedWordIds.length > 0) {
+          await fetch(`${apiUrl}/api/flag-words`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              word_ids: flaggedWordIds
+            }),
+          });
+        }
+      }
+
       const response = await fetch(`${apiUrl}/api/test-complete`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          test_session_id: testSessionId
+          test_session_id: words[0].test_session_id
         }),
       });
 
@@ -151,6 +200,21 @@ const Test = () => {
     <Box sx={{ maxWidth: 600, mx: 'auto', p: 2 }}>
       <LinearProgress variant="determinate" value={progress} sx={{ mb: 3 }} />
 
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+        <Button 
+          onClick={handlePrevious} 
+          disabled={currentIndex === 0}
+        >
+          Previous
+        </Button>
+        <Button 
+          onClick={handleNext} 
+          disabled={currentIndex === words.length - 1 || !answers[currentWord?.id]}
+        >
+          Next
+        </Button>
+      </Box>
+
       <Card
         sx={{
           minHeight: 300,
@@ -158,27 +222,46 @@ const Test = () => {
           flexDirection: 'column',
           justifyContent: 'center',
           cursor: 'pointer',
+          position: 'relative',
         }}
         onClick={handleFlip}
       >
+        <IconButton
+          sx={{ position: 'absolute', top: 8, right: 8 }}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleFlagWord();
+          }}
+          color={flaggedWords[currentWord?.id] ? "error" : "default"}
+        >
+          <FlagIcon />
+        </IconButton>
         <CardContent sx={{ textAlign: 'center' }}>
           {!showMeaning ? (
             <Typography variant="h4" gutterBottom>
-              {currentWord.word}
+              {currentWord?.word}
             </Typography>
           ) : (
             <Typography variant="h6" color="text.secondary">
-              {currentWord.meaning}
+              {currentWord?.meaning}
             </Typography>
           )}
         </CardContent>
       </Card>
 
       <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 3 }}>
-        <IconButton color="error" size="large" onClick={() => handleAnswer(false)}>
+        <IconButton 
+          color={answers[currentWord?.id] === false ? "error" : "default"}
+          size="large" 
+          onClick={() => handleAnswer(false)}
+        >
           <CloseIcon />
         </IconButton>
-        <IconButton color="success" size="large" onClick={() => handleAnswer(true)}>
+        <IconButton 
+          color={answers[currentWord?.id] === true ? "success" : "default"}
+          size="large" 
+          onClick={() => handleAnswer(true)}
+        >
           <CheckIcon />
         </IconButton>
       </Box>
